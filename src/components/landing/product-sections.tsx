@@ -379,7 +379,7 @@ export function ProductSections() {
               delay={200}
               className="mt-4 text-base text-muted-foreground"
             >
-              Join the waitlist — we're onboarding teams building with coding
+              Join the waitlist — we&apos;re onboarding teams building with coding
               agents first.
             </DiffuseTypeText>
           </div>
