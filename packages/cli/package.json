@@ -4,9 +4,13 @@
   "description": "CLI to attach to minimachin.es machine sessions",
   "type": "module",
   "bin": {
-    "cli": "./dist/cli.js"
+    "minimachines": "dist/cli.js",
+    "cli": "dist/cli.js"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node -e \"require('fs').chmodSync('dist/cli.js',0o755)\"",
     "dev": "tsx src/cli.ts",
@@ -26,7 +30,13 @@
   "publishConfig": {
     "access": "public"
   },
-  "keywords": ["minimachines", "minimachine", "cli", "agents", "vm"],
+  "keywords": [
+    "minimachines",
+    "minimachine",
+    "cli",
+    "agents",
+    "vm"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
