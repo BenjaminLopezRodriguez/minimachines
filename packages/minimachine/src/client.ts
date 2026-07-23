@@ -18,6 +18,8 @@ export type Machine = {
   memoryGb: number;
   templateId?: string;
   dockerfile?: string;
+  /** Browser / ttyd console URL when the machine is provisioned. */
+  emulatorUrl?: string;
   ownerUserId?: string;
 };
 
@@ -67,7 +69,7 @@ export class Minimachine {
       throw new Error("apiKey is required");
     }
     this.apiKey = opts.apiKey.trim();
-    this.baseUrl = (opts.baseUrl ?? "https://minimachin.es").replace(/\/$/, "");
+    this.baseUrl = (opts.baseUrl ?? "https://www.minimachin.es").replace(/\/$/, "");
     this.fetchImpl = opts.fetch ?? fetch;
   }
 

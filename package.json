@@ -22,6 +22,8 @@
     "mcp:dev": "pnpm --filter @minimachines/mcp start",
     "minimachine:mcp": "pnpm --filter minimachine dev",
     "minimachine:build": "pnpm --filter minimachine build",
+    "cli:dev": "pnpm --filter @minimachines/cli dev",
+    "cli:build": "pnpm --filter @minimachines/cli build",
     "preview": "next build && next start",
     "start": "next start",
     "typecheck": "tsc --noEmit",

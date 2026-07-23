@@ -4,7 +4,9 @@ import { authkitMiddleware } from "@workos-inc/authkit-nextjs";
  * Session refresh happens here (Edge) so Server Components can call
  * `withAuth()` without trying to set cookies (which throws in RSC).
  * Dashboard is gated via middlewareAuth.
- * `/api/v1` uses API keys — skip cookie auth there.
+ *
+ * Do NOT put `/api/v1` in the matcher — AuthKit can strip the
+ * `Authorization` header that API keys use.
  */
 export default authkitMiddleware({
   middlewareAuth: {
@@ -15,7 +17,6 @@ export default authkitMiddleware({
       "/sign-up",
       "/auth/:path*",
       "/api/trpc/:path*",
-      "/api/v1/:path*",
     ],
   },
 });
@@ -29,6 +30,5 @@ export const config = {
     "/sign-up",
     "/auth/:path*",
     "/api/trpc/:path*",
-    "/api/v1/:path*",
   ],
 };

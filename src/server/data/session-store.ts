@@ -7,8 +7,14 @@ import {
   execs as execsTable,
   jobs as jobsTable,
   machineFiles,
+  machines as machinesTable,
 } from "~/server/db/schema";
 
+import {
+  execSandbox,
+  modalEnabled,
+  writeSandboxFile,
+} from "./modal-driver";
 import { getMachine } from "./machine-store";
 
 export type ExecResult = {
@@ -39,15 +45,10 @@ export type Job = {
 
 export type SessionStore = {
   execs: ExecResult[];
-  files: Record<string, string>; // `${machineId}:${path}` → base64
+  files: Record<string, string>;
   jobs: Job[];
 };
 
-/**
- * Throws unless the machine exists AND belongs to the caller. Ownership is
- * enforced in SQL by getMachine, so a foreign machine is indistinguishable
- * from a missing one.
- */
 async function requireOwnedMachine(machineId: string, ownerUserId: string) {
   const machine = await getMachine(machineId, { ownerUserId });
   if (!machine) {
@@ -56,8 +57,21 @@ async function requireOwnedMachine(machineId: string, ownerUserId: string) {
   return machine;
 }
 
+async function sandboxIdFor(machineId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ sandboxId: machinesTable.sandboxId })
+    .from(machinesTable)
+    .where(eq(machinesTable.id, machineId))
+    .limit(1);
+  return row?.sandboxId ?? null;
+}
+
 function normalize(path: string) {
   return path.replace(/^\/+/, "");
+}
+
+function shellQuote(s: string) {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
 export async function execMachine(
@@ -66,6 +80,27 @@ export async function execMachine(
   opts: { ownerUserId: string },
 ): Promise<ExecResult> {
   await requireOwnedMachine(machineId, opts.ownerUserId);
+  const started = Date.now();
+  let exitCode = 0;
+  let stdout = `[minimachine stub] ran: ${input.cmd}\n`;
+  let stderr = "";
+
+  const sandboxId = await sandboxIdFor(machineId);
+  if (sandboxId && modalEnabled()) {
+    const cwd = input.cwd?.trim() ?? "/workspace";
+    const script = `cd ${shellQuote(cwd)} && ${input.cmd}`;
+    const result = await execSandbox(sandboxId, [
+      "su-exec",
+      "agent",
+      "sh",
+      "-c",
+      script,
+    ]);
+    exitCode = result.exitCode;
+    stdout = result.stdout;
+    stderr = result.stderr;
+  }
+
   const [row] = await db
     .insert(execsTable)
     .values({
@@ -73,10 +108,10 @@ export async function execMachine(
       machineId,
       cmd: input.cmd,
       cwd: input.cwd,
-      exitCode: 0,
-      stdout: `[minimachine stub] ran: ${input.cmd}\n`,
-      stderr: "",
-      durationMs: 12,
+      exitCode,
+      stdout,
+      stderr,
+      durationMs: Math.max(1, Date.now() - started),
     })
     .returning();
 
@@ -106,6 +141,11 @@ export async function putMachineFile(
     typeof content === "string"
       ? Buffer.from(content, "utf8")
       : Buffer.from(content);
+
+  const sandboxId = await sandboxIdFor(machineId);
+  if (sandboxId && modalEnabled()) {
+    await writeSandboxFile(sandboxId, normalized, buf);
+  }
 
   await db
     .insert(machineFiles)
@@ -190,7 +230,6 @@ export async function getJob(
   id: string,
   opts: { ownerUserId: string },
 ): Promise<Job | null> {
-  // Owner is part of the WHERE clause — no existence oracle.
   const [row] = await db
     .select()
     .from(jobsTable)

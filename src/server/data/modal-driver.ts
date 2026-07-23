@@ -94,3 +94,59 @@ export async function terminateMachine(sandboxId: string): Promise<void> {
   const sandbox = await client.sandboxes.fromId(sandboxId);
   await sandbox.terminate();
 }
+
+async function sandboxFromId(sandboxId: string) {
+  const { ModalClient } = await import("modal");
+  const client = new ModalClient();
+  return client.sandboxes.fromId(sandboxId);
+}
+
+/** Write a UTF-8 (or binary) file into a running sandbox under `/workspace`. */
+export async function writeSandboxFile(
+  sandboxId: string,
+  relativePath: string,
+  content: string | Uint8Array,
+): Promise<void> {
+  const sandbox = await sandboxFromId(sandboxId);
+  const path = relativePath.startsWith("/")
+    ? relativePath
+    : `/workspace/${relativePath.replace(/^\/+/, "")}`;
+  const bytes =
+    typeof content === "string"
+      ? Buffer.from(content, "utf8")
+      : Buffer.from(content);
+  const b64 = Buffer.from(bytes).toString("base64");
+
+  const dir = path.slice(0, path.lastIndexOf("/"));
+  const script = [
+    dir && dir !== "/" ? `mkdir -p ${JSON.stringify(dir)}` : "true",
+    `printf '%s' ${JSON.stringify(b64)} | base64 -d > ${JSON.stringify(path)}`,
+    `chown agent:agent ${JSON.stringify(path)} || true`,
+  ].join(" && ");
+
+  const proc = await sandbox.exec(["sh", "-c", script], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stderr, exitCode] = await Promise.all([
+    proc.stderr.readText(),
+    proc.wait(),
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(`writeSandboxFile failed (${exitCode}): ${stderr}`);
+  }
+}
+
+export async function execSandbox(
+  sandboxId: string,
+  argv: string[],
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const sandbox = await sandboxFromId(sandboxId);
+  const proc = await sandbox.exec(argv, { stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    proc.stdout.readText(),
+    proc.stderr.readText(),
+    proc.wait(),
+  ]);
+  return { exitCode, stdout, stderr };
+}

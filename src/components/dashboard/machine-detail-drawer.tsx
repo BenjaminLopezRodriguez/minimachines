@@ -60,7 +60,7 @@ function runCommand(pm: PackageManager, machineId: string): string {
     case "yarn":
       return `yarn dlx @minimachines/cli run ${machineId}`;
     case "agent":
-      return `mm agent run ${machineId}`;
+      return `pnpm dlx @minimachines/cli agent run ${machineId}`;
   }
 }
 
