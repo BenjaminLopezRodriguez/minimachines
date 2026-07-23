@@ -36,6 +36,13 @@
       "when": 1784847105945,
       "tag": "0004_unknown_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784849446170,
+      "tag": "0005_faithful_bruce_banner",
+      "breakpoints": true
     }
   ]
 }

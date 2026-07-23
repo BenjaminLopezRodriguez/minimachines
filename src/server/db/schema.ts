@@ -21,6 +21,19 @@ export const waitlist = createTable(
   (t) => [uniqueIndex("waitlist_email_idx").on(t.email)],
 );
 
+/** Inbound requests from agent-builders who want their agent on the platform. */
+export const partnerRequests = createTable("partner_request", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  company: d.varchar({ length: 200 }).notNull(),
+  email: d.varchar({ length: 320 }).notNull(),
+  agentName: d.varchar({ length: 200 }),
+  note: d.text(),
+  createdAt: d
+    .timestamp({ withTimezone: true })
+    .$defaultFn(() => new Date())
+    .notNull(),
+}));
+
 /**
  * Dashboard API keys (`mm_…`). Only the sha256 hash is stored — the secret is
  * shown once at creation and is not recoverable.
