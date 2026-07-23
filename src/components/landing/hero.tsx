@@ -5,14 +5,14 @@ import { VmPreview } from "./vm-preview";
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden pt-14">
+    <section className="relative overflow-hidden pt-12">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_70%_-10%,oklch(0.78_0.06_155/0.45),transparent_60%)] dark:bg-[radial-gradient(ellipse_90%_55%_at_70%_-10%,oklch(0.32_0.025_155/0.4),transparent_60%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_70%_-5%,rgb(91_124_153/0.14),transparent_55%)] dark:bg-[radial-gradient(ellipse_80%_50%_at_70%_-5%,rgb(129_161_193/0.12),transparent_55%)]"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.5] dark:opacity-[0.4] [background-image:linear-gradient(to_right,oklch(0_0_0/0.05)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0_0_0/0.05)_1px,transparent_1px)] dark:[background-image:linear-gradient(to_right,oklch(1_0_0/0.035)_1px,transparent_1px),linear-gradient(to_bottom,oklch(1_0_0/0.035)_1px,transparent_1px)] [background-size:72px_72px] [mask-image:linear-gradient(to_bottom,black_40%,transparent_95%)]"
+        className="pointer-events-none absolute inset-0 opacity-[0.4] [background-image:linear-gradient(to_right,rgb(20_20_20/0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgb(20_20_20/0.04)_1px,transparent_1px)] dark:opacity-[0.35] dark:[background-image:linear-gradient(to_right,rgb(255_255_255/0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgb(255_255_255/0.035)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black_35%,transparent_92%)]"
       />
 
       <div className="relative mx-auto grid max-w-6xl gap-10 px-5 pb-16 pt-16 sm:px-8 lg:grid-cols-2 lg:items-center lg:gap-14 lg:pb-20 lg:pt-20">
@@ -20,11 +20,11 @@ export function Hero() {
           <DiffuseTypeText
             as="h1"
             startOnMount
-            delay={120}
-            speed={42}
+            delay={280}
+            speed={48}
             wave={4}
-            variance={0.25}
-            className="font-sans text-[2.75rem] leading-[0.95] tracking-[-0.045em] text-foreground sm:text-6xl lg:text-[4.5rem]"
+            variance={0.3}
+            className="font-sans text-[2.75rem] leading-[0.95] font-medium tracking-[-0.04em] text-foreground sm:text-6xl lg:text-[4.25rem]"
           >
             minimachines
           </DiffuseTypeText>
@@ -32,8 +32,8 @@ export function Hero() {
           <DiffuseTypeText
             as="p"
             startOnMount
-            delay={700}
-            speed={22}
+            delay={900}
+            speed={26}
             wave={3}
             className="mt-5 max-w-md text-xl leading-snug tracking-tight text-foreground/90 sm:text-2xl"
           >
@@ -43,8 +43,8 @@ export function Hero() {
           <DiffuseTypeText
             as="p"
             startOnMount
-            delay={1600}
-            speed={14}
+            delay={1800}
+            speed={16}
             wave={4}
             variance={0.4}
             className="mt-4 max-w-md text-base leading-relaxed text-muted-foreground"

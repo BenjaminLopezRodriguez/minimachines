@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { waitlist } from "~/server/db/schema";
+import { rateLimit } from "~/server/lib/rate-limit";
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 
@@ -15,9 +16,23 @@ export const waitlistRouter = createTRPCRouter({
           .trim()
           .toLowerCase()
           .email("Enter a valid email address."),
+        // Honeypot — bots fill it, humans never see it.
+        website: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Honeypot tripped: look successful, insert nothing.
+      if (input.website) return { id: undefined };
+
+      const ip =
+        ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+      if (!rateLimit(`waitlist:${ip}`, { limit: 5, windowMs: 10 * 60_000 }).ok) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many attempts. Please try again in a few minutes.",
+        });
+      }
+
       try {
         const [entry] = await ctx.db
           .insert(waitlist)

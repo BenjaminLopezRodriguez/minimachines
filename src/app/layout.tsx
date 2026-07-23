@@ -1,5 +1,6 @@
 import "~/styles/globals.css";
 
+import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { type Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
@@ -43,7 +44,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="font-sans">
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+        <AuthKitProvider>
+          <TRPCReactProvider>{children}</TRPCReactProvider>
+        </AuthKitProvider>
       </body>
     </html>
   );

@@ -169,7 +169,8 @@ export function DiffuseTypeText({
           observer.disconnect();
         }
       },
-      { threshold, rootMargin: "0px 0px -8% 0px" },
+      // Safari is pickier about threshold — fire earlier so scroll sections animate
+      { threshold: Math.min(threshold, 0.15), rootMargin: "0px 0px -4% 0px" },
     );
 
     observer.observe(node);
@@ -180,14 +181,24 @@ export function DiffuseTypeText({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, delay, startOnMount, threshold]);
 
-  // Scramble tick + resolve onto real characters
+  // Flicker noise glyphs during scramble, and during startOnMount idle wait
   useEffect(() => {
-    if (phase !== "scramble") return;
+    const shouldFlicker = phase === "scramble" || (phase === "idle" && startOnMount);
+    if (!shouldFlicker) return;
 
     const flicker = window.setInterval(() => {
       setTick((t) => t + 1);
     }, 36);
     timersRef.current.push(flicker);
+
+    return () => {
+      window.clearInterval(flicker);
+    };
+  }, [phase, startOnMount]);
+
+  // Scramble tick + resolve onto real characters
+  useEffect(() => {
+    if (phase !== "scramble") return;
 
     const base = Math.max(12, speed);
     let cursor = 0;
@@ -248,10 +259,6 @@ export function DiffuseTypeText({
 
     const first = window.setTimeout(beat, base * 0.4);
     timersRef.current.push(first);
-
-    return () => {
-      window.clearInterval(flicker);
-    };
   }, [phase, speed, variance, chars]);
 
   // Once done, render the real string — no noise spans left behind
@@ -260,7 +267,7 @@ export function DiffuseTypeText({
       as,
       {
         ref,
-        className: cn("relative", className),
+        className: cn("relative overflow-visible", className),
         style,
       },
       text,
@@ -271,11 +278,11 @@ export function DiffuseTypeText({
     as,
     {
       ref,
-      className: cn("relative", className),
+      className: cn("relative overflow-visible", className),
       style,
       "aria-label": text,
     },
-    <span aria-hidden className="whitespace-pre-wrap">
+    <span aria-hidden className="overflow-visible whitespace-pre-wrap">
       {chars.map((char, index) => {
         if (char === "\n") return <br key={`br-${index}`} />;
 
@@ -288,6 +295,27 @@ export function DiffuseTypeText({
         }
 
         if (phase === "idle") {
+          // startOnMount: show noise immediately so AuthKit/RSC remounts
+          // never leave the brand as invisible `text-transparent`.
+          if (startOnMount) {
+            const glyph = noiseGlyph(seeds[index] ?? index, tick);
+            const delayMs = `${(seeds[index] ?? index) % 7}0ms`;
+            return (
+              <span key={`${index}-idle`} className="mm-type-glyph">
+                <span className="invisible">{char}</span>
+                <span
+                  className="mm-type-noise absolute inset-[-0.45em] flex items-center justify-center font-mono text-[0.92em] leading-none text-muted-foreground"
+                  style={{
+                    WebkitAnimationDelay: delayMs,
+                    animationDelay: delayMs,
+                  }}
+                >
+                  {glyph}
+                </span>
+              </span>
+            );
+          }
+
           return (
             <span
               key={`${index}-idle`}
@@ -301,9 +329,17 @@ export function DiffuseTypeText({
         const isLocked = locked.has(index);
 
         if (isLocked) {
-          // Settled: the actual character from the source string
+          const delayMs = `${((seeds[index] ?? index) % 5) * 12}ms`;
+          // Settled: fade + motion-blur into the real character
           return (
-            <span key={`${index}-ok`} className="mm-type-settle inline-block">
+            <span
+              key={`${index}-ok`}
+              className="mm-type-settle mm-type-glyph"
+              style={{
+                WebkitAnimationDelay: delayMs,
+                animationDelay: delayMs,
+              }}
+            >
               {char}
             </span>
           );
@@ -312,17 +348,22 @@ export function DiffuseTypeText({
         const glyph = noiseGlyph(seeds[index] ?? index, tick);
         const isCursor = (CURSORS as readonly string[]).includes(glyph);
         const isBlock = (BLOCKS as readonly string[]).includes(glyph);
+        const delayMs = `${(seeds[index] ?? index) % 7}0ms`;
 
         return (
-          <span key={`${index}-noise`} className="relative inline-block">
+          <span key={`${index}-noise`} className="mm-type-glyph">
             <span className="invisible">{char}</span>
             <span
               className={cn(
-                "absolute inset-0 flex items-center justify-center font-mono text-[0.92em] leading-none",
+                "absolute inset-[-0.45em] flex items-center justify-center font-mono text-[0.92em] leading-none",
                 isCursor && "mm-type-noise-cursor text-foreground",
                 isBlock && "mm-type-noise-block text-foreground",
                 !isCursor && !isBlock && "mm-type-noise text-muted-foreground",
               )}
+              style={{
+                WebkitAnimationDelay: delayMs,
+                animationDelay: delayMs,
+              }}
             >
               {glyph}
             </span>

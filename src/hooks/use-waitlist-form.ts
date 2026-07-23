@@ -12,7 +12,7 @@ export function useWaitlistForm() {
 
   const form = useForm<WaitlistFormValues>({
     resolver: zodResolver(waitlistFormSchema),
-    defaultValues: { email: "" },
+    defaultValues: { email: "", website: "" },
   });
 
   const joinWaitlist = api.waitlist.join.useMutation({

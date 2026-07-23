@@ -30,7 +30,7 @@ export function WaitlistForm() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="border border-signal/30 bg-signal/5 px-4 py-5"
+            className="border border-signal/25 bg-signal/8 px-4 py-4 rounded-lg"
           >
             <p className="text-sm font-medium text-foreground">
               You&apos;re on the list.
@@ -62,6 +62,15 @@ export function WaitlistForm() {
                 noValidate
                 className="flex flex-col gap-2 sm:flex-row sm:items-start"
               >
+                {/* Honeypot: off-screen, skipped by AT and tab order. Bots fill it, humans don't. */}
+                <input
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  className="absolute left-[-9999px] h-0 w-0 overflow-hidden"
+                  {...form.register("website")}
+                />
                 <FormField
                   control={form.control}
                   name="email"
@@ -74,7 +83,7 @@ export function WaitlistForm() {
                           type="email"
                           autoComplete="email"
                           disabled={isSubmitting}
-                          className="h-10 rounded-none border-border bg-background/60"
+                          className="h-9 rounded-md border-border bg-card text-[13px] shadow-none"
                           {...field}
                         />
                       </FormControl>
@@ -85,7 +94,7 @@ export function WaitlistForm() {
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="h-10 shrink-0 rounded-none px-5"
+                  className="h-9 shrink-0 rounded-md px-3.5 text-[13px] font-medium"
                 >
                   {isSubmitting ? (
                     <>
