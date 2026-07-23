@@ -1,3 +1,5 @@
+import { apiKeysRouter } from "~/server/api/routers/apiKeys";
+import { machinesRouter } from "~/server/api/routers/machines";
 import { waitlistRouter } from "~/server/api/routers/waitlist";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 
@@ -8,6 +10,8 @@ import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
  */
 export const appRouter = createTRPCRouter({
   waitlist: waitlistRouter,
+  machines: machinesRouter,
+  apiKeys: apiKeysRouter,
 });
 
 // export type definition of API

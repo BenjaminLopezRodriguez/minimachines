@@ -17,12 +17,6 @@ const steps = [
   },
 ] as const;
 
-const metrics = [
-  { stat: "1.2s", label: "avg. VM spin-up" },
-  { stat: "0", label: "workflow changes" },
-  { stat: "24/7", label: "agent loops" },
-] as const;
-
 const features = [
   {
     title: "VM marketplace",
@@ -52,7 +46,7 @@ const features = [
       { toned: "muted", text: "$ mm deploy --env prod --from vm-7f3a" },
       { toned: "default", text: "  building image… done (41s)" },
       { toned: "default", text: "  rolling 3 / 3 healthy" },
-      { toned: "signal", text: "→ https://api.northline.dev" },
+      { toned: "signal", text: "→ https://api.example.com" },
     ],
   },
   {
@@ -69,9 +63,9 @@ const features = [
     title: "Collaborative cloud",
     body: "Share running machines with your team — same VM, same workspace, agents and humans working side by side.",
     terminal: [
-      { toned: "muted", text: "$ mm share vm-7f3a --with elena@silt.dev" },
+      { toned: "muted", text: "$ mm share vm-7f3a --with teammate@company.com" },
       { toned: "default", text: "  invite sent · shell + workspace" },
-      { toned: "signal", text: "→ elena joined · 2 sessions active" },
+      { toned: "signal", text: "→ teammate joined · 2 sessions active" },
     ],
   },
 ] as const;
@@ -88,30 +82,6 @@ const points = [
   {
     title: "Bring your stack",
     body: "No new agent to learn. Wire up the models and tools you already trust and give them room to run.",
-  },
-] as const;
-
-const testimonials = [
-  {
-    quote:
-      "We used to leave Claude overnight on a spare Mac Mini and hope it didn't melt. Moving the same workflow onto a minimachines VM cut our iteration loop roughly in half — and the laptop fans finally shut up.",
-    name: "Priya Nandakumar",
-    role: "Staff engineer",
-    company: "Northline",
-  },
-  {
-    quote:
-      "The copyleft checker caught a GPL transitive dep an agent had pulled mid-refactor. That alone paid for the pilot. Cloud debug is what we actually live in day to day though — attaching to a stuck session beats SSH archaeology.",
-    name: "Marcus Ellison",
-    role: "Founding engineer",
-    company: "Harborkit",
-  },
-  {
-    quote:
-      "Collaborative cloud is the underrated part. I can jump onto the same VM my teammate's Codex run is using, poke the failing test, and hand it back without shipping zip files around Slack.",
-    name: "Elena Voss",
-    role: "Engineering manager",
-    company: "Silt",
   },
 ] as const;
 
@@ -155,22 +125,6 @@ export function ProductSections() {
       <section className="border-y border-border bg-surface/40">
         <div className="mx-auto flex max-w-6xl justify-center px-5 py-10 sm:justify-start sm:px-8">
           <AgentLogos className="sm:justify-start" />
-        </div>
-      </section>
-
-      <section className="border-b border-border">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-          {metrics.map((metric) => (
-            <div
-              key={metric.label}
-              className="px-5 py-10 sm:px-8 sm:py-12 first:sm:pl-8 last:sm:pr-8"
-            >
-              <p className="font-mono text-3xl tracking-tight text-foreground sm:text-4xl">
-                {metric.stat}
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">{metric.label}</p>
-            </div>
-          ))}
         </div>
       </section>
 
@@ -320,43 +274,6 @@ export function ProductSections() {
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      <section id="stories" className="scroll-mt-14 border-t border-border">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-          <div className="max-w-2xl">
-            <DiffuseTypeText
-              as="h2"
-              speed={20}
-              wave={4}
-              delay={80}
-              className="text-3xl tracking-tight text-foreground sm:text-4xl"
-            >
-              What it feels like once the agents leave your laptop
-            </DiffuseTypeText>
-          </div>
-
-          <ul className="mt-14 grid gap-4 md:grid-cols-3 md:gap-5">
-            {testimonials.map((item) => (
-              <li
-                key={item.name}
-                className="flex flex-col border border-border bg-card p-6 sm:p-7"
-              >
-                <blockquote className="flex-1 text-[15px] leading-relaxed text-foreground/90">
-                  &ldquo;{item.quote}&rdquo;
-                </blockquote>
-                <footer className="mt-8 border-t border-border pt-5">
-                  <p className="text-sm font-medium tracking-tight text-foreground">
-                    {item.name}
-                  </p>
-                  <p className="mt-1 font-mono text-[11px] tracking-wide text-muted-foreground">
-                    {item.role} · {item.company}
-                  </p>
-                </footer>
-              </li>
-            ))}
-          </ul>
         </div>
       </section>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -17,6 +17,14 @@ import { useWaitlistForm } from "~/hooks/use-waitlist-form";
 
 export function WaitlistForm() {
   const { form, onSubmit, status, isSubmitting, reset } = useWaitlistForm();
+  const reduce = useReducedMotion();
+  const anim = reduce
+    ? { initial: false as const }
+    : {
+        initial: { opacity: 0, y: 6 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: -6 },
+      };
 
   return (
     <div className="w-full max-w-md">
@@ -26,9 +34,7 @@ export function WaitlistForm() {
             key="success"
             role="status"
             aria-live="polite"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
+            {...anim}
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="border border-signal/25 bg-signal/8 px-4 py-4 rounded-lg"
           >
@@ -51,9 +57,7 @@ export function WaitlistForm() {
         ) : (
           <motion.div
             key="form"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
+            {...anim}
             transition={{ duration: 0.2 }}
           >
             <Form {...form}>

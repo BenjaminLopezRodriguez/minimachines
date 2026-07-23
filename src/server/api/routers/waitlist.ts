@@ -24,8 +24,9 @@ export const waitlistRouter = createTRPCRouter({
       // Honeypot tripped: look successful, insert nothing.
       if (input.website) return { id: undefined };
 
-      const ip =
-        ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+      // x-real-ip is set by Vercel to the true client IP. Don't trust the
+      // leftmost x-forwarded-for entry — the client can spoof it.
+      const ip = ctx.headers.get("x-real-ip")?.trim() ?? "unknown";
       if (!rateLimit(`waitlist:${ip}`, { limit: 5, windowMs: 10 * 60_000 }).ok) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",

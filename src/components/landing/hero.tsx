@@ -18,7 +18,7 @@ export function Hero() {
       <div className="relative mx-auto grid max-w-6xl gap-10 px-5 pb-16 pt-16 sm:px-8 lg:grid-cols-2 lg:items-center lg:gap-14 lg:pb-20 lg:pt-20">
         <div>
           <DiffuseTypeText
-            as="h1"
+            as="p"
             startOnMount
             delay={280}
             speed={48}
@@ -30,7 +30,7 @@ export function Hero() {
           </DiffuseTypeText>
 
           <DiffuseTypeText
-            as="p"
+            as="h1"
             startOnMount
             delay={900}
             speed={26}

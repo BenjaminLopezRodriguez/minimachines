@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+# minimachine (local experiment)
+#
+# Core mission: a prompt is executed by an agent running INSIDE a throwaway
+# container, over SSH, on that machine's CPU. The calling session gets back a
+# one-line status, not a transcript.
+#
+#   mm run "build me a X"     spin up -> ssh in -> run Claude inside -> 1 line back
+#   mm ls                     list machines
+#   mm view <id>              what got built (file tree)
+#   mm cat <id> <path>        read one artifact
+#   mm sync <id>              copy artifacts to ./minimachine-out/<id>/
+#   mm ssh <id>               interactive shell on the machine
+#   mm emulator <id>          browser terminal (ttyd/xterm.js/WebGL2) on the machine
+#   mm logs <id>              full inner-agent transcript
+#   mm rm <id>                destroy machine + volume
+set -euo pipefail
+
+IMAGE=minimachine-local:alpine
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STATE="${MM_HOME:-$HOME/.minimachine}"
+
+# Optional credential file, written by the user, never read by this script's
+# author. Keeps CLAUDE_CODE_OAUTH_TOKEN out of shell history and out of any
+# agent transcript. chmod 600 it.
+#   printf 'export CLAUDE_CODE_OAUTH_TOKEN=%s\n' "$(claude setup-token)" \
+#     > ~/.minimachine/env && chmod 600 ~/.minimachine/env
+# shellcheck disable=SC1090
+[ -f "$STATE/env" ] && . "$STATE/env"
+SSHOPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+         -o LogLevel=ERROR -o ConnectTimeout=3)
+
+die() { printf 'mm: %s\n' "$*" >&2; exit 1; }
+mdir() { echo "$STATE/$1"; }
+port_of() { cat "$(mdir "$1")/port"; }
+
+free_port() {
+  python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()'
+}
+
+ensure_image() {
+  if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    printf 'mm: building image (first run only)...\n' >&2
+    docker build -q -t "$IMAGE" "$HERE" >/dev/null
+  fi
+}
+
+# ---- boot a machine, return its id -----------------------------------------
+boot() {
+  local id d port
+  id="mm-$(date +%s)-$RANDOM"
+  d="$(mdir "$id")"; mkdir -p "$d"
+
+  ssh-keygen -q -t ed25519 -N '' -f "$d/key" -C "minimachine-$id"
+  port="$(free_port)"; echo "$port" > "$d/port"
+  local ttyport; ttyport="$(free_port)"; echo "$ttyport" > "$d/ttyport"
+
+  [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}${ANTHROPIC_API_KEY:-}" ] \
+    || die "set CLAUDE_CODE_OAUTH_TOKEN (from: claude setup-token) or ANTHROPIC_API_KEY"
+
+  # `-e VAR` with no value forwards the host's value by reference — the secret
+  # is never read, echoed, or written to disk by this script.
+  # Real resource limits, so the dashboard reports allocation rather than
+  # guessing. Without these every machine reports the whole host and the
+  # fleet's vCPU total exceeds the machine it runs on.
+  docker run -d --name "$id" \
+    --cpus "${MM_CPUS:-2}" --memory "${MM_MEMORY:-2g}" \
+    -p "127.0.0.1:$port:22" \
+    -p "127.0.0.1:$ttyport:7681" \
+    -e MM_PUBKEY="$(cat "$d/key.pub")" \
+    -e CLAUDE_CODE_OAUTH_TOKEN \
+    -e ANTHROPIC_API_KEY \
+    -v "$id:/workspace" \
+    "$IMAGE" >/dev/null
+
+  # wait for sshd
+  local i
+  for i in $(seq 1 40); do
+    if ssh "${SSHOPTS[@]}" -i "$d/key" -p "$port" agent@127.0.0.1 true 2>/dev/null; then
+      echo "$id"; return 0
+    fi
+    sleep 0.5
+  done
+  die "sshd never came up on $id (docker logs $id)"
+}
+
+mssh() {
+  local id="$1"; shift
+  ssh "${SSHOPTS[@]}" -i "$(mdir "$id")/key" -p "$(port_of "$id")" agent@127.0.0.1 "$@"
+}
+
+# ---- commands ---------------------------------------------------------------
+# boot -> feed stdin to a remote command -> capture -> one-line report.
+# Shared by `run` (inner agent) and `smoke` (plain shell, no LLM).
+dispatch() {
+  local label="$1" remote="$2" stdin="$3"
+  ensure_image
+  local id d
+  id="$(boot)"; d="$(mdir "$id")"
+  printf '%s' "$stdin" > "$d/prompt"
+
+  # The work runs INSIDE the machine. Its stdout is captured, not surfaced.
+  set +e
+  printf '%s' "$stdin" | mssh "$id" "$remote" > "$d/run.log" 2>&1
+  local rc=$?
+  set -e
+
+  docker stop "$id" >/dev/null 2>&1 || true
+
+  if [ $rc -ne 0 ]; then
+    printf '✗ %s [%s] failed (rc=%d) — mm logs %s\n' "$id" "$label" "$rc" "$id"
+    return $rc
+  fi
+
+  # One line back to the caller. That is the whole point.
+  local summary files
+  summary="$(tr -d '\r' < "$d/run.log" | grep -vE '^\s*$' | tail -n 1 | cut -c1-100)"
+  files="$(docker run --rm -v "$id:/w" alpine sh -c \
+            'find /w -type f -not -path "*/.*" | wc -l' 2>/dev/null | tr -d ' ')"
+  printf '✓ %s — %s\n  %s file(s) built · view: mm view %s · sync: mm sync %s\n' \
+    "$id" "${summary:-done}" "${files:-0}" "$id" "$id"
+}
+
+cmd_run() {
+  local prompt="${1:-}"; [ -n "$prompt" ] || die 'usage: mm run "<prompt>"'
+  dispatch agent 'cd /workspace && claude -p --dangerously-skip-permissions' "$prompt"
+}
+
+# Proves boot + ssh + in-container compute + artifact capture without the LLM.
+cmd_smoke() {
+  # sh -e so a failing step fails the run — otherwise a trailing successful
+  # echo masks earlier errors and the machine reports a false green.
+  dispatch smoke 'cd /workspace && sh -es' '
+    echo "def fizz(n): return \"Fizz\"*(n%3==0)+\"Buzz\"*(n%5==0) or str(n)" > fizzbuzz.py
+    echo "print([fizz(i) for i in range(1,21)])" >> fizzbuzz.py
+    python3 fizzbuzz.py > out.txt
+    echo "built on $(uname -srm) as $(id -un) · $(nproc) cpu"
+  '
+}
+
+cmd_ls() {
+  [ -d "$STATE" ] || { echo "no machines"; return 0; }
+  printf '%-26s %-8s %s\n' ID STATE PROMPT
+  local d id st
+  for d in "$STATE"/mm-*; do
+    [ -d "$d" ] || continue
+    id="$(basename "$d")"
+    st="$(docker inspect -f '{{.State.Status}}' "$id" 2>/dev/null || echo gone)"
+    printf '%-26s %-8s %s\n' "$id" "$st" \
+      "$(tr '\n' ' ' < "$d/prompt" 2>/dev/null | tr -s ' ' | head -c 46)"
+  done
+}
+
+cmd_view() { docker run --rm -v "$1:/w" alpine find /w -type f -not -path '*/.*' | sed 's|^/w|.|'; }
+cmd_cat()  { docker run --rm -v "$1:/w" alpine cat "/w/${2#./}"; }
+cmd_logs() { cat "$(mdir "$1")/run.log"; }
+
+cmd_sync() {
+  local id="$1" out="./minimachine-out/$1"
+  mkdir -p "$out"
+  docker run --rm -v "$id:/w" -v "$(cd "$(dirname "$out")" && pwd)/$(basename "$out"):/out" \
+    alpine sh -c 'cd /w && cp -a . /out/ 2>/dev/null || true'
+  printf 'synced -> %s\n' "$out"
+}
+
+cmd_ssh() {
+  local id="$1"
+  docker start "$id" >/dev/null 2>&1 || true
+  sleep 1
+  ssh "${SSHOPTS[@]}" -i "$(mdir "$id")/key" -p "$(port_of "$id")" agent@127.0.0.1
+}
+
+# Browser terminal on the machine — the local stand-in for
+# https://mm-<id>.minimachin.es/emulator. Started on demand so idle machines
+# stay lean. ttyd = xterm.js + WebGL2 over a websocket.
+cmd_emulator() {
+  local id="$1" tp d
+  d="$(mdir "$id")"
+  [ -f "$d/ttyport" ] || die "$id predates emulator support — create a new machine"
+  tp="$(cat "$d/ttyport")"
+
+  docker start "$id" >/dev/null 2>&1 || true
+  if ! docker exec "$id" pgrep -x ttyd >/dev/null 2>&1; then
+    # -W writable, -a close on exit. Bind 0.0.0.0 *inside* the container; the
+    # host side is already pinned to 127.0.0.1 by the -p mapping.
+    # ponytail: no -t client-options here — `docker exec` mangles `k=v` args
+    # into two argv entries, and the only one wanted was a cosmetic tab title.
+    docker exec -d -u agent "$id" \
+      ttyd -p 7681 -i 0.0.0.0 -W bash
+    sleep 1
+  fi
+
+  local url="http://127.0.0.1:$tp"
+  printf 'emulator: %s\n' "$url"
+  printf '  (prod shape: https://%s.minimachin.es/emulator)\n' "$id"
+  command -v open >/dev/null 2>&1 && open "$url" >/dev/null 2>&1 || true
+}
+
+cmd_rm() {
+  docker rm -f "$1" >/dev/null 2>&1 || true
+  docker volume rm "$1" >/dev/null 2>&1 || true
+  rm -rf "$(mdir "$1")"
+  printf 'removed %s\n' "$1"
+}
+
+case "${1:-}" in
+  run)   shift; cmd_run "$@" ;;
+  smoke) cmd_smoke ;;
+  ls)    cmd_ls ;;
+  view) shift; cmd_view "$@" ;;
+  cat)  shift; cmd_cat "$@" ;;
+  logs) shift; cmd_logs "$@" ;;
+  sync) shift; cmd_sync "$@" ;;
+  ssh)      shift; cmd_ssh "$@" ;;
+  emulator) shift; cmd_emulator "$@" ;;
+  rm)       shift; cmd_rm "$@" ;;
+  *)        sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+esac

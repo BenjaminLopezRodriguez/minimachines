@@ -57,13 +57,21 @@ export async function SiteHeader() {
               </form>
             </>
           ) : (
-            <Button
-              asChild
-              size="sm"
-              className="ml-1.5 h-7 rounded-md px-2.5 text-[13px] font-medium"
-            >
-              <Link href="/sign-in">Sign in</Link>
-            </Button>
+            <>
+              <Link
+                href="/sign-in"
+                className="rounded-md px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]"
+              >
+                Sign in
+              </Link>
+              <Button
+                asChild
+                size="sm"
+                className="ml-1.5 h-7 rounded-md px-2.5 text-[13px] font-medium"
+              >
+                <Link href="/sign-up">Sign up</Link>
+              </Button>
+            </>
           )}
         </nav>
       </div>

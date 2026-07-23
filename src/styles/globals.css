@@ -104,8 +104,10 @@
   }
 }
 
-/* Dashboard — Cursor-inspired app chrome (scoped; landing stays light) */
-.mm-cursor {
+/* Dashboard — Cursor-inspired app chrome (scoped; landing stays light).
+   Named .mm-app, distinct from the .mm-cursor blink below — same class for both
+   made the whole dashboard blink and blanked the hero caret. */
+.mm-app {
   color-scheme: dark;
   --background: #141414;
   --foreground: #ededed;

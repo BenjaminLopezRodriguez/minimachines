@@ -1,50 +1,36 @@
-import { Button } from "~/components/ui/button";
-import {
-  DashboardStats,
-  MachineTable,
-} from "~/components/dashboard/machine-table";
-import { machines } from "~/server/data/machines";
+import { withAuth } from "@workos-inc/authkit-nextjs";
 
-export default function DashboardPage() {
-  const running = machines.filter((m) => m.status === "running").length;
+import { signOutAction } from "~/components/dashboard/actions";
+import { FleetList } from "~/components/dashboard/fleet-list";
+import { StatsRibbon } from "~/components/dashboard/machine-table";
+import { MobileFleetDrawer } from "~/components/dashboard/mobile-fleet-drawer";
+import { NewMachineCommand } from "~/components/dashboard/new-machine-command";
+import { listMachines } from "~/server/data/machine-store";
+
+export default async function DashboardPage() {
+  // Gate lives in middleware (middlewareAuth). Read-only withAuth here —
+  // never ensureSignedIn in an RSC (cookie write → 500).
+  const { user } = await withAuth();
+  const fromName = [user?.firstName, user?.lastName].filter(Boolean).join(" ");
+  const display =
+    fromName.length > 0 ? fromName : (user?.email ?? "Account");
+  const machines = user?.id
+    ? await listMachines({ ownerUserId: user.id })
+    : [];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-xl font-medium tracking-tight text-foreground">
-            Machines
-          </h1>
-          <p className="text-[13px] text-muted-foreground">
-            <span className="tabular-nums text-foreground/90">{running}</span>{" "}
-            running · dedicated VMs for your agents
-          </p>
-        </div>
-        <Button
-          id="new"
-          size="sm"
-          className="h-7 self-start rounded-md bg-primary px-2.5 text-[13px] font-medium text-primary-foreground hover:bg-white sm:self-auto"
-        >
-          New machine
-        </Button>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-4 pb-20">
+      <StatsRibbon machines={machines} />
 
-      <DashboardStats machines={machines} />
+      <FleetList machines={machines} />
 
-      <section aria-labelledby="fleet-heading" className="space-y-2.5">
-        <div className="flex items-baseline justify-between gap-4 px-0.5">
-          <h2
-            id="fleet-heading"
-            className="text-[13px] font-medium text-foreground"
-          >
-            Fleet
-          </h2>
-          <p className="text-[12px] text-muted-foreground tabular-nums">
-            {machines.length} total
-          </p>
-        </div>
-        <MachineTable machines={machines} />
-      </section>
+      <NewMachineCommand />
+
+      <MobileFleetDrawer
+        display={display}
+        email={user?.email}
+        signOutAction={signOutAction}
+      />
     </div>
   );
 }

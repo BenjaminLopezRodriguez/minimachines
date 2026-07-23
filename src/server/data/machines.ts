@@ -3,6 +3,8 @@ export type MachineStatus = "running" | "starting" | "stopped" | "error";
 export type Machine = {
   id: string;
   name: string;
+  /** Short activity label for sidebar, e.g. "Grok working on website". */
+  title: string;
   agent: string;
   task: string;
   status: MachineStatus;
@@ -11,59 +13,23 @@ export type Machine = {
   memoryGb: number;
   uptime: string;
   lastActive: string;
+  templateId?: string;
+  dockerfile?: string;
+  /**
+   * Browser terminal (ttyd) for this machine, when one is reachable.
+   * Local dev: `http://127.0.0.1:<port>`. Production: the machine's
+   * tunnel/subdomain, e.g. `https://mm-<id>.minimachin.es/emulator`.
+   */
+  emulatorUrl?: string;
+  /** WorkOS user id (or API key owner). */
+  ownerUserId?: string;
 };
 
-/** Placeholder fleet until the real provisioner exists. */
-export const machines: Machine[] = [
-  {
-    id: "vm_7f3a2c",
-    name: "vm-7f3a",
-    agent: "claude",
-    task: "refactor auth middleware",
-    status: "running",
-    region: "us-west-2",
-    cpu: 4,
-    memoryGb: 16,
-    uptime: "2h 14m",
-    lastActive: "just now",
-  },
-  {
-    id: "vm_91b0e4",
-    name: "vm-91b0",
-    agent: "codex",
-    task: "write integration tests",
-    status: "running",
-    region: "us-west-2",
-    cpu: 8,
-    memoryGb: 32,
-    uptime: "47m",
-    lastActive: "1m ago",
-  },
-  {
-    id: "vm_c3d812",
-    name: "vm-c3d8",
-    agent: "grok",
-    task: "benchmark cold starts",
-    status: "starting",
-    region: "us-east-1",
-    cpu: 4,
-    memoryGb: 16,
-    uptime: "—",
-    lastActive: "just now",
-  },
-  {
-    id: "vm_a01fe9",
-    name: "vm-a01f",
-    agent: "cursor",
-    task: "idle workspace",
-    status: "stopped",
-    region: "eu-west-1",
-    cpu: 2,
-    memoryGb: 8,
-    uptime: "—",
-    lastActive: "3h ago",
-  },
-];
+/** Seed fleet used when `.data/machines.json` does not exist yet. */
+export const seedMachines: Machine[] = [];
+
+/** @deprecated Prefer listMachines() from machine-store — kept for static imports. */
+export const machines = seedMachines;
 
 export function machineStats(list: Machine[]) {
   const running = list.filter((m) => m.status === "running").length;

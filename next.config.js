@@ -5,6 +5,12 @@
 import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
-const config = {};
+const config = {
+  // Keep AI template Dockerfiles + manifest available to serverless tracing.
+  outputFileTracingIncludes: {
+    "/dashboard": ["./templates/**/*"],
+    "/api/trpc/[trpc]": ["./templates/**/*"],
+  },
+};
 
 export default config;

@@ -11,6 +11,10 @@ Landing page and early access waitlist for minimachines, built on the T3 Stack.
 - [React Hook Form](https://react-hook-form.com) + [Zod](https://zod.dev)
 - [Framer Motion](https://www.framer.com/motion/)
 
+## Auth
+
+WorkOS AuthKit. See **[AUTH.md](./AUTH.md)** for env setup, `/sign-in` + `/sign-up`, and how agents create accounts (`pnpm auth:create-user`).
+
 ## Getting started
 
 1. Install dependencies:
@@ -64,6 +68,11 @@ Landing page and early access waitlist for minimachines, built on the T3 Stack.
 - `pnpm db:push` — push schema directly (useful for local dev)
 - `pnpm db:studio` — open Drizzle Studio
 - `pnpm db:seed` — seed the waitlist table
+- `pnpm mcp:dev` — run the minimachines MCP server (templates + mocked create)
+
+## Machine templates
+
+AI-optimized Docker templates live in `templates/` with LLM-readable metadata in `templates/manifest.json`. The dashboard **New machine** command palette and the MCP server (`packages/mcp`) share the same catalog. See `packages/mcp/README.md` and `docs/superpowers/specs/2026-07-23-ai-docker-templates-design.md`.
 
 ## Deployment (Vercel + Neon)
 

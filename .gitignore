@@ -20,6 +20,7 @@ next-env.d.ts
 
 # production
 /build
+packages/*/dist
 
 # misc
 .DS_Store
@@ -44,3 +45,10 @@ yarn-error.log*
 
 # idea files
 .idea
+.env*
+
+# mocked fleet / local agent data
+.data/
+
+# minimachine local experiment: synced machine artifacts
+experiments/minimachine-local/minimachine-out/

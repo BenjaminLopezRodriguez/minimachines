@@ -1,19 +1,13 @@
 import { db } from "~/server/db";
 import { waitlist } from "~/server/db/schema";
 
-const seedEmails = [
-  "founder@minimachines.dev",
-  "early-tester@minimachines.dev",
-  "beta@minimachines.dev",
-];
-
+/**
+ * Optional seed entrypoint. Intentionally empty — no dummy waitlist rows.
+ * Add real emails here only when you need fixtures for local QA.
+ */
 async function main() {
-  await db
-    .insert(waitlist)
-    .values(seedEmails.map((email) => ({ email })))
-    .onConflictDoNothing();
-
-  console.log(`Seeded ${seedEmails.length} waitlist entries.`);
+  const count = await db.$count(waitlist);
+  console.log(`Waitlist rows: ${count}. No seed data inserted.`);
   process.exit(0);
 }
 
