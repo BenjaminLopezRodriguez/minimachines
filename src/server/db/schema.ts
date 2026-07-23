@@ -115,6 +115,33 @@ export const machineFiles = createTable(
   ],
 );
 
+/**
+ * Device-authorization codes (RFC 8628 style) for CLI/agent login. The raw
+ * device code is never stored — only its sha256 hash. No secret is stored at
+ * rest: the API key is minted at first approved poll and returned once.
+ */
+export const deviceCodes = createTable(
+  "device_code",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    userCode: d.varchar({ length: 16 }).notNull(),
+    deviceCodeHash: d.varchar({ length: 64 }).notNull(),
+    approvedUserId: d.varchar({ length: 128 }),
+    mintedKeyId: d.varchar({ length: 64 }),
+    consumedAt: d.timestamp({ withTimezone: true }),
+    deniedAt: d.timestamp({ withTimezone: true }),
+    expiresAt: d.timestamp({ withTimezone: true }).notNull(),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    uniqueIndex("device_code_hash_idx").on(t.deviceCodeHash),
+    uniqueIndex("device_code_user_idx").on(t.userCode),
+  ],
+);
+
 export const jobs = createTable(
   "job",
   (d) => ({

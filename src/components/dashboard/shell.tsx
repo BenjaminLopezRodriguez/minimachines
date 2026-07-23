@@ -1,4 +1,4 @@
-import { KeyRound, LogOut, Plus } from "lucide-react";
+import { BookOpen, KeyRound, LogOut, Plus } from "lucide-react";
 import Link from "next/link";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import type { ReactNode } from "react";
@@ -50,6 +50,16 @@ export async function DashboardShell({
             <Link href="/dashboard/settings">
               <KeyRound className="size-3.5 opacity-70" aria-hidden />
               API keys
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            className="h-9 w-full justify-start gap-2.5 rounded-md px-2.5 text-[13px] font-medium text-foreground hover:bg-white/[0.04]"
+          >
+            <Link href="/dashboard/docs">
+              <BookOpen className="size-3.5 opacity-70" aria-hidden />
+              Docs
             </Link>
           </Button>
           <form action={signOutAction}>
