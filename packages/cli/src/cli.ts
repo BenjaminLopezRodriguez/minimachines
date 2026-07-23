@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import {
   chmodSync,
   mkdirSync,
@@ -48,11 +48,16 @@ type DeviceTokenResponse = {
 
 function usage(): never {
   console.error(`Usage:
-  minimachines run <machineId>
+  minimachines run <machineId> [--keep-awake] [--lid-closed]
   minimachines login [--no-open] [--paste]
   minimachines logout
   minimachines whoami
   mm run <machineId>
+
+Run flags (macOS):
+  --keep-awake   caffeinate the Mac while the console session is open
+  --lid-closed   also run with the lid shut + low-power mode (uses sudo,
+                 restores your settings on exit)
 
 Env:
   MINIMACHINE_API_KEY   overrides logged-in key (create at https://minimachin.es/dashboard/settings)
@@ -209,7 +214,84 @@ async function openUrl(url: string) {
   });
 }
 
-async function run(machineId: string) {
+function pmGet(key: string): string {
+  try {
+    const out = execFileSync("pmset", ["-g"], { encoding: "utf8" });
+    return new RegExp(`^\\s*${key}\\s+(\\d+)`, "m").exec(out)?.[1] ?? "0";
+  } catch {
+    return "0";
+  }
+}
+
+/**
+ * Keep this Mac awake while a long run is in progress. Returns a cleanup fn.
+ *
+ * `caffeinate -dimsu` needs no privileges and auto-releases when killed.
+ * `--lid-closed` additionally sets `disablesleep` (run with the lid shut) and
+ * `lowpowermode` (run cool/quiet) via sudo — the actual agent work happens in
+ * the remote sandbox, so throttling this Mac doesn't slow it. Prior pmset
+ * values are saved and restored. macOS only; a no-op elsewhere.
+ */
+function keepAwake(opts: { lidClosed: boolean }): () => void {
+  if (platform() !== "darwin") {
+    console.error("keep-awake is macOS-only — skipping.");
+    return () => {};
+  }
+  const caf = spawn("caffeinate", ["-dimsu"], { stdio: "ignore" });
+  let restore = () => {};
+
+  if (opts.lidClosed) {
+    const priorSleep = pmGet("disablesleep");
+    const priorLpm = pmGet("lowpowermode");
+    console.error("Enabling lid-closed + low-power mode (needs sudo)…");
+    try {
+      execFileSync(
+        "sudo",
+        ["pmset", "-a", "disablesleep", "1", "lowpowermode", "1"],
+        { stdio: "inherit" },
+      );
+      restore = () => {
+        try {
+          execFileSync(
+            "sudo",
+            ["pmset", "-a", "disablesleep", priorSleep, "lowpowermode", priorLpm],
+            { stdio: "inherit" },
+          );
+        } catch {
+          /* best effort */
+        }
+      };
+    } catch {
+      console.error("Could not set pmset (sudo declined?) — caffeinate only.");
+    }
+  }
+
+  return () => {
+    try {
+      caf.kill();
+    } catch {
+      /* already gone */
+    }
+    restore();
+  };
+}
+
+/** Block until Ctrl-C, then run cleanup. */
+function holdUntilInterrupt(stop: () => void) {
+  console.log("Keeping this Mac awake. Press Ctrl-C to stop.");
+  return new Promise<void>((resolve) => {
+    process.on("SIGINT", () => {
+      stop();
+      console.log("\nReleased.");
+      resolve();
+    });
+  });
+}
+
+async function run(
+  machineId: string,
+  opts: { keepAwake?: boolean; lidClosed?: boolean } = {},
+) {
   const machine = await getMachine(machineId);
   console.log(`${machine.id}  ${machine.status}  ${machine.name}`);
   if (machine.task) console.log(`task: ${machine.task}`);
@@ -230,6 +312,13 @@ async function run(machineId: string) {
   console.log(`console: ${url}`);
   console.log("Opening browser console…");
   await openUrl(url);
+
+  // Keep the Mac awake so a long unattended session in the console survives
+  // an idle timeout or a closed lid.
+  if (opts.keepAwake || opts.lidClosed) {
+    const stop = keepAwake({ lidClosed: !!opts.lidClosed });
+    await holdUntilInterrupt(stop);
+  }
 }
 
 // --- auth commands ----------------------------------------------------------
@@ -372,13 +461,15 @@ async function main() {
   const args = process.argv.slice(2);
   const cmd = args[0];
 
-  if (cmd === "run" && args[1]) {
-    await run(args[1]);
+  const keepAwake = args.includes("--keep-awake");
+  const lidClosed = args.includes("--lid-closed"); // implies keep-awake
+  if (cmd === "run" && args[1] && !args[1].startsWith("-")) {
+    await run(args[1], { keepAwake, lidClosed });
     return;
   }
   // Support `mm agent run <id>` as shown in the dashboard "agent" preset.
   if (cmd === "agent" && args[1] === "run" && args[2]) {
-    await run(args[2]);
+    await run(args[2], { keepAwake, lidClosed });
     return;
   }
   if (cmd === "login") {
