@@ -3,7 +3,11 @@ import { randomBytes } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "~/server/db";
-import { machines as machinesTable } from "~/server/db/schema";
+import {
+  execs as execsTable,
+  machineFiles,
+  machines as machinesTable,
+} from "~/server/db/schema";
 
 import type { Machine, MachineStatus } from "./machines";
 import { modalEnabled, provisionMachine, terminateMachine } from "./modal-driver";
@@ -166,4 +170,83 @@ export async function stopMachine(
   }
 
   return toMachine(row);
+}
+
+function ownerWhere(id: string, ownerUserId?: string) {
+  return ownerUserId
+    ? and(eq(machinesTable.id, id), eq(machinesTable.ownerUserId, ownerUserId))
+    : eq(machinesTable.id, id);
+}
+
+/**
+ * Terminate the old sandbox and provision a fresh one, keeping the machine row.
+ * The workspace is NOT persisted across a restart — the sandbox is ephemeral,
+ * so a restarted machine starts empty.
+ */
+export async function restartMachine(
+  id: string,
+  filter?: { ownerUserId?: string },
+): Promise<Machine | null> {
+  const [row] = await db
+    .select()
+    .from(machinesTable)
+    .where(ownerWhere(id, filter?.ownerUserId))
+    .limit(1);
+  if (!row) return null;
+
+  if (row.sandboxId && modalEnabled()) {
+    try {
+      await terminateMachine(row.sandboxId);
+    } catch (err) {
+      console.error("[minimachines] restart: terminate failed", err);
+    }
+  }
+
+  let sandboxId: string | null = null;
+  let emulatorUrl: string | null = null;
+  let status: MachineStatus = "running";
+  if (modalEnabled()) {
+    try {
+      const p = await provisionMachine({ cpu: row.cpu, memoryGb: row.memoryGb });
+      sandboxId = p.sandboxId;
+      emulatorUrl = p.emulatorUrl ?? null;
+    } catch (err) {
+      console.error("[minimachines] restart: provision failed", err);
+      status = "error";
+    }
+  }
+
+  const [updated] = await db
+    .update(machinesTable)
+    .set({ status, sandboxId, emulatorUrl, uptime: "0m", lastActive: "just now" })
+    .where(eq(machinesTable.id, row.id))
+    .returning();
+  return updated ? toMachine(updated) : null;
+}
+
+/** Terminate the sandbox and delete the machine and its session data. */
+export async function deleteMachine(
+  id: string,
+  filter?: { ownerUserId?: string },
+): Promise<boolean> {
+  const [row] = await db
+    .select()
+    .from(machinesTable)
+    .where(ownerWhere(id, filter?.ownerUserId))
+    .limit(1);
+  if (!row) return false;
+
+  if (row.sandboxId && modalEnabled()) {
+    try {
+      await terminateMachine(row.sandboxId);
+    } catch (err) {
+      console.error("[minimachines] delete: terminate failed", err);
+    }
+  }
+
+  // No FK cascade — clear session rows explicitly so file blobs don't leak.
+  await db.delete(machineFiles).where(eq(machineFiles.machineId, row.id));
+  await db.delete(execsTable).where(eq(execsTable.machineId, row.id));
+  await db.delete(machinesTable).where(eq(machinesTable.id, row.id));
+  return true;
 }

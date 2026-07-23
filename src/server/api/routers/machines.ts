@@ -6,8 +6,14 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "~/server/api/trpc";
-import { createMachine, listMachines } from "~/server/data/machine-store";
-import { execMachine } from "~/server/data/session-store";
+import {
+  createMachine,
+  deleteMachine,
+  listMachines,
+  restartMachine,
+  stopMachine,
+} from "~/server/data/machine-store";
+import { execMachine, machineStats } from "~/server/data/session-store";
 import { loadTemplates, searchTemplates } from "~/server/data/templates";
 
 export const machinesRouter = createTRPCRouter({
@@ -74,4 +80,36 @@ export const machinesRouter = createTRPCRouter({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
       }
     }),
+
+  // Lifecycle actions for the dashboard drawer, all owner-scoped.
+  stop: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const m = await stopMachine(input.id, { ownerUserId: ctx.userId });
+      if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "Machine not found" });
+      return m;
+    }),
+
+  restart: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const m = await restartMachine(input.id, { ownerUserId: ctx.userId });
+      if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "Machine not found" });
+      return m;
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const ok = await deleteMachine(input.id, { ownerUserId: ctx.userId });
+      if (!ok) throw new TRPCError({ code: "NOT_FOUND", message: "Machine not found" });
+      return { ok };
+    }),
+
+  // Live resource sample for the usage graph. Null when nothing is running.
+  stats: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .query(({ ctx, input }) =>
+      machineStats(input.id, ctx.userId).catch(() => null),
+    ),
 });

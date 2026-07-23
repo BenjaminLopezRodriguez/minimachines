@@ -249,6 +249,47 @@ export async function getJob(
   };
 }
 
+export type MachineStats = {
+  loadPct: number;
+  cpuCount: number;
+  memUsedMb: number;
+  memTotalMb: number;
+};
+
+/**
+ * Live resource sample from inside the sandbox (1-min load + memory). Returns
+ * null when there is no running sandbox to sample (Modal off, or stopped).
+ * Cheap enough to poll; one exec per call.
+ */
+export async function machineStats(
+  machineId: string,
+  ownerUserId: string,
+): Promise<MachineStats | null> {
+  // The sandbox sees the HOST's cpu/mem via /proc, not its allocation. Use the
+  // machine's allocated cpu/memoryGb as the denominators and only sample live
+  // usage from inside, so the graph reflects the machine, not the host.
+  const machine = await requireOwnedMachine(machineId, ownerUserId);
+  const sandboxId = await sandboxIdFor(machineId);
+  if (!sandboxId || !modalEnabled()) return null;
+
+  const { stdout, exitCode } = await execSandbox(sandboxId, [
+    "sh",
+    "-c",
+    "cat /proc/loadavg | awk '{print $1}'; free -m | awk '/Mem:/{print $3}'",
+  ]);
+  if (exitCode !== 0) return null;
+
+  const [loadLine = "0", memUsedLine = "0"] = stdout.trim().split("\n");
+  const load = Number(loadLine) || 0;
+  const cpuCount = machine.cpu || 1;
+  return {
+    loadPct: Math.min(100, Math.round((load / cpuCount) * 100)),
+    cpuCount,
+    memUsedMb: Number(memUsedLine) || 0,
+    memTotalMb: machine.memoryGb * 1024,
+  };
+}
+
 export async function listJobs(machineId: string, ownerUserId: string) {
   await requireOwnedMachine(machineId, ownerUserId);
   const rows = await db

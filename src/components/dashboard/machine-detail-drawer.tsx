@@ -6,11 +6,12 @@ import {
   ChevronDown,
   Copy,
   ExternalLink,
-  HeartPulse,
   RotateCcw,
   Square,
   Terminal,
+  Trash2,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -146,6 +147,35 @@ function UsageGraph({ machine }: { machine: Machine }) {
   const w = 320;
   const h = 120;
   const pad = 4;
+  const running = machine.status === "running";
+
+  // Poll a live sample from inside the sandbox while the machine runs.
+  const stats = api.machines.stats.useQuery(
+    { id: machine.id },
+    {
+      enabled: running,
+      refetchInterval: running ? 4000 : false,
+      refetchOnWindowFocus: false,
+    },
+  );
+
+  // Accumulate a rolling window of CPU-load samples for the line.
+  const [samples, setSamples] = useState<number[]>([]);
+  useEffect(() => {
+    const pct = stats.data?.loadPct;
+    if (pct !== undefined) setSamples((s) => [...s, pct].slice(-40));
+  }, [stats.data]);
+  // Reset history when switching to a different machine.
+  useEffect(() => setSamples([]), [machine.id]);
+
+  const latest = stats.data;
+  const y = (pct: number) => pad + (1 - pct / 100) * (h - pad * 2);
+  const points =
+    samples.length >= 2
+      ? samples
+          .map((p, i) => `${(i / (samples.length - 1)) * w},${y(p)}`)
+          .join(" ")
+      : null;
 
   return (
     <div className="space-y-3 pt-1">
@@ -155,14 +185,21 @@ function UsageGraph({ machine }: { machine: Machine }) {
             CPU usage
           </p>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
-            Last hour · {machine.cpu} vCPU · {machine.memoryGb} GB
+            {running ? "live" : machine.status} · {machine.cpu} vCPU ·{" "}
+            {machine.memoryGb} GB
           </p>
         </div>
         <div className="text-right">
           <p className="text-xl font-medium tabular-nums tracking-tight text-foreground">
-            —
+            {latest ? `${latest.loadPct}%` : "—"}
           </p>
-          <p className="text-[11px] text-muted-foreground">no data</p>
+          <p className="text-[11px] text-muted-foreground tabular-nums">
+            {latest
+              ? `${latest.memUsedMb}/${latest.memTotalMb} MB`
+              : running
+                ? "sampling…"
+                : "no data"}
+          </p>
         </div>
       </div>
 
@@ -172,75 +209,75 @@ function UsageGraph({ machine }: { machine: Machine }) {
           preserveAspectRatio="none"
           className="block h-32 w-full text-muted-foreground"
           role="img"
-          aria-label="CPU usage unavailable"
+          aria-label="CPU load over time"
         >
-          {[25, 50, 75].map((y) => (
+          {[25, 50, 75].map((gl) => (
             <line
-              key={y}
+              key={gl}
               x1={0}
               x2={w}
-              y1={pad + (1 - y / 100) * (h - pad * 2)}
-              y2={pad + (1 - y / 100) * (h - pad * 2)}
+              y1={y(gl)}
+              y2={y(gl)}
               stroke="currentColor"
               strokeOpacity="0.08"
               className="text-foreground"
             />
           ))}
-          <text
-            x={w / 2}
-            y={h / 2}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            className="fill-muted-foreground text-[11px]"
-          >
-            Metrics unavailable
-          </text>
+          {points ? (
+            <polyline
+              points={points}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeOpacity={0.85}
+              className="text-foreground"
+            />
+          ) : (
+            <text
+              x={w / 2}
+              y={h / 2}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              className="fill-muted-foreground text-[11px]"
+            >
+              {running ? "sampling…" : "Metrics unavailable"}
+            </text>
+          )}
         </svg>
       </div>
     </div>
   );
 }
 
-function QuickActions({ machine }: { machine: Machine }) {
-  const canRun = machine.status === "running";
-  const canStop = machine.status === "running";
-  const canStart =
-    machine.status === "stopped" || machine.status === "error";
+const actionRow = cn(
+  "inline-flex h-10 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] font-medium text-foreground transition-colors",
+  "hover:bg-white/[0.04] disabled:pointer-events-none disabled:opacity-35",
+);
 
-  const actions = [
-    {
-      id: "health",
-      label: "Check health",
-      icon: HeartPulse,
-      disabled: machine.status === "starting",
+function QuickActions({
+  machine,
+  onDeleted,
+}: {
+  machine: Machine;
+  onDeleted: () => void;
+}) {
+  const router = useRouter();
+  const refresh = () => router.refresh();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const stop = api.machines.stop.useMutation({ onSuccess: refresh });
+  const restart = api.machines.restart.useMutation({ onSuccess: refresh });
+  const del = api.machines.delete.useMutation({
+    onSuccess: () => {
+      refresh();
+      onDeleted();
     },
-    {
-      id: "open",
-      label: "Open machine",
-      icon: ExternalLink,
-      disabled: !canRun,
-    },
-    {
-      id: "console",
-      label: "Open console",
-      icon: Terminal,
-      disabled: !canRun || !machine.emulatorUrl,
-      // Browser terminal for this machine, when one is reachable.
-      href: canRun ? machine.emulatorUrl : undefined,
-    },
-    {
-      id: "restart",
-      label: "Restart",
-      icon: RotateCcw,
-      disabled: !canRun,
-    },
-    {
-      id: "stop",
-      label: canStart ? "Start" : "Stop",
-      icon: canStart ? Activity : Square,
-      disabled: !(canStop || canStart),
-    },
-  ] as const;
+  });
+  const busy = stop.isPending || restart.isPending || del.isPending;
+
+  const running = machine.status === "running";
+  const stopped = machine.status === "stopped" || machine.status === "error";
+  const err = stop.error ?? restart.error ?? del.error;
 
   return (
     <div className="px-3 pb-1 pt-3">
@@ -248,39 +285,91 @@ function QuickActions({ machine }: { machine: Machine }) {
         Quick actions
       </p>
       <ul className="space-y-0.5">
-        {actions.map((action) => {
-          const cls = cn(
-            "inline-flex h-10 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] font-medium text-foreground transition-colors",
-            "hover:bg-white/[0.04] disabled:pointer-events-none disabled:opacity-35",
-          );
-          const href = "href" in action ? action.href : undefined;
-          return (
-            <li key={action.id}>
-              {href && !action.disabled ? (
-                <a href={href} target="_blank" rel="noreferrer" className={cls}>
-                  <action.icon
-                    className="size-3.5 shrink-0 opacity-70"
-                    aria-hidden
-                  />
-                  {action.label}
-                  <ExternalLink
-                    className="ml-auto size-3 shrink-0 opacity-40"
-                    aria-hidden
-                  />
-                </a>
-              ) : (
-                <button type="button" disabled={action.disabled} className={cls}>
-                  <action.icon
-                    className="size-3.5 shrink-0 opacity-70"
-                    aria-hidden
-                  />
-                  {action.label}
-                </button>
-              )}
-            </li>
-          );
-        })}
+        {running && machine.emulatorUrl && (
+          <li>
+            <a
+              href={machine.emulatorUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={actionRow}
+            >
+              <Terminal className="size-3.5 shrink-0 opacity-70" aria-hidden />
+              Open console
+              <ExternalLink
+                className="ml-auto size-3 shrink-0 opacity-40"
+                aria-hidden
+              />
+            </a>
+          </li>
+        )}
+
+        {/* Restart = terminate the sandbox and provision a fresh one. */}
+        <li>
+          <button
+            type="button"
+            disabled={busy || (!running && !stopped)}
+            onClick={() => restart.mutate({ id: machine.id })}
+            className={actionRow}
+          >
+            <RotateCcw className="size-3.5 shrink-0 opacity-70" aria-hidden />
+            {restart.isPending ? "Restarting…" : "Restart"}
+          </button>
+        </li>
+
+        {/* Stop a running machine; Start (re-provision) a stopped one. */}
+        <li>
+          <button
+            type="button"
+            disabled={busy || (!running && !stopped)}
+            onClick={() =>
+              running
+                ? stop.mutate({ id: machine.id })
+                : restart.mutate({ id: machine.id })
+            }
+            className={actionRow}
+          >
+            {running ? (
+              <Square className="size-3.5 shrink-0 opacity-70" aria-hidden />
+            ) : (
+              <Activity className="size-3.5 shrink-0 opacity-70" aria-hidden />
+            )}
+            {running
+              ? stop.isPending
+                ? "Stopping…"
+                : "Stop"
+              : restart.isPending
+                ? "Starting…"
+                : "Start"}
+          </button>
+        </li>
+
+        {/* Delete needs a second click to confirm (destructive). */}
+        <li>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              confirmDelete
+                ? del.mutate({ id: machine.id })
+                : setConfirmDelete(true)
+            }
+            className={cn(actionRow, "text-destructive")}
+          >
+            <Trash2 className="size-3.5 shrink-0 opacity-70" aria-hidden />
+            {del.isPending
+              ? "Deleting…"
+              : confirmDelete
+                ? "Confirm delete?"
+                : "Delete"}
+          </button>
+        </li>
       </ul>
+
+      {err && (
+        <p className="px-2.5 pt-1 text-[12px] text-destructive" role="alert">
+          {err.message}
+        </p>
+      )}
     </div>
   );
 }
@@ -438,7 +527,10 @@ export function MachineDetailDrawer({
               {tab === "overview" ? (
                 <>
                   <UsageGraph machine={machine} />
-                  <QuickActions machine={machine} />
+                  <QuickActions
+                    machine={machine}
+                    onDeleted={() => onOpenChange(false)}
+                  />
                 </>
               ) : (
                 <RemotePanel machine={machine} />
