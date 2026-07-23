@@ -31,6 +31,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
 import type { Machine, MachineStatus } from "~/server/data/machines";
+import { api } from "~/trpc/react";
 
 const statusLabel: Record<MachineStatus, string> = {
   running: "Running",
@@ -284,6 +285,95 @@ function QuickActions({ machine }: { machine: Machine }) {
   );
 }
 
+function RemotePanel({ machine }: { machine: Machine }) {
+  const [cmd, setCmd] = useState("");
+  const canRun = machine.status === "running";
+  const exec = api.machines.exec.useMutation();
+  const result = exec.data;
+
+  const run = () => {
+    const trimmed = cmd.trim();
+    if (!trimmed || !canRun || exec.isPending) return;
+    exec.mutate({ id: machine.id, cmd: trimmed });
+  };
+
+  return (
+    <div className="space-y-2 px-3 pb-1 pt-3">
+      <div className="flex min-w-0 items-stretch gap-1.5">
+        <input
+          value={cmd}
+          onChange={(e) => setCmd(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              run();
+            }
+          }}
+          disabled={!canRun}
+          placeholder="ls -la"
+          aria-label="Shell command"
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          className={cn(
+            "flex h-8 min-w-0 flex-1 rounded-md border border-border bg-card/60 px-2.5 font-mono text-[12px] text-foreground/90",
+            "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "disabled:cursor-not-allowed disabled:opacity-50",
+          )}
+        />
+        <Button
+          type="button"
+          size="sm"
+          onClick={run}
+          disabled={!canRun || exec.isPending || !cmd.trim()}
+          className="h-8 shrink-0 rounded-md px-3 text-[12px] font-medium"
+        >
+          {exec.isPending ? "Running…" : "Run"}
+        </Button>
+      </div>
+
+      {!canRun ? (
+        <p className="px-0.5 text-[11px] text-muted-foreground">
+          Start the machine to run commands.
+        </p>
+      ) : (
+        <p className="px-0.5 text-[11px] text-muted-foreground">
+          Runs as <code className="font-mono">agent</code> under{" "}
+          <code className="font-mono">/workspace</code>.
+        </p>
+      )}
+
+      {exec.error ? (
+        <p
+          className="rounded-md border border-border bg-card/60 px-2.5 py-2 text-[11px] text-destructive"
+          role="alert"
+        >
+          {exec.error.message}
+        </p>
+      ) : null}
+
+      {result ? (
+        <div className="rounded-md border border-border bg-card/60">
+          <pre className="max-h-56 overflow-auto px-2.5 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+            {result.stdout ? (
+              <span className="text-foreground/90">{result.stdout}</span>
+            ) : null}
+            {result.stderr ? (
+              <span className="text-destructive">{result.stderr}</span>
+            ) : null}
+            {!result.stdout && !result.stderr ? (
+              <span className="text-muted-foreground">(no output)</span>
+            ) : null}
+          </pre>
+          <p className="border-t border-border px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground tabular-nums">
+            exit {result.exitCode} · {result.durationMs}ms
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function MachineDetailDrawer({
   machine,
   open,
@@ -293,6 +383,7 @@ export function MachineDetailDrawer({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const [tab, setTab] = useState<"overview" | "remote">("overview");
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="mm-app mm-cursor-panel max-h-[90vh] border-border">
@@ -317,9 +408,41 @@ export function MachineDetailDrawer({
               </p>
             </DrawerHeader>
 
+            <div className="px-3 pt-1">
+              <div
+                role="tablist"
+                aria-label="Machine detail sections"
+                className="inline-flex h-8 items-center gap-0.5 rounded-md border border-border bg-card/60 p-0.5"
+              >
+                {(["overview", "remote"] as const).map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === id}
+                    onClick={() => setTab(id)}
+                    className={cn(
+                      "h-7 rounded-[5px] px-3 text-[12px] font-medium capitalize transition-colors",
+                      tab === id
+                        ? "bg-white/[0.06] text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {id}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="min-h-0 flex-1 overflow-y-auto pb-2">
-              <UsageGraph machine={machine} />
-              <QuickActions machine={machine} />
+              {tab === "overview" ? (
+                <>
+                  <UsageGraph machine={machine} />
+                  <QuickActions machine={machine} />
+                </>
+              ) : (
+                <RemotePanel machine={machine} />
+              )}
             </div>
 
             <DrawerFooter className="pt-1">

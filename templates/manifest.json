@@ -139,6 +139,20 @@
       "resources": { "cpu": 4, "memoryGb": 16 },
       "dockerfile": "gemini-devbox/Dockerfile",
       "status": "ready"
+    },
+    {
+      "id": "ollama-devbox",
+      "name": "Ollama (local LLM)",
+      "group": "agents",
+      "summary": "Local qwen2.5-coder:1.5b served via Ollama for on-box, offline codegen.",
+      "when_to_use": "Use when the task wants an on-box model — offline code generation, no hosted API key, or privacy-sensitive work. The small qwen2.5-coder:1.5b is pulled at runtime and served over the Ollama API.",
+      "when_not_to_use": "Do not use for heavy model training or when a hosted model is fine and faster. CPU-only inference is slow (seconds per response); prefer an agent-branded devbox when a cloud LLM drives the session.",
+      "tags": ["ollama", "llm", "qwen", "codegen", "local-model"],
+      "stacks": ["python"],
+      "agents": ["ollama"],
+      "resources": { "cpu": 4, "memoryGb": 4 },
+      "dockerfile": "ollama-devbox/Dockerfile",
+      "status": "ready"
     }
   ]
 }

@@ -21,6 +21,7 @@ void test("loads all expected template ids", () => {
     "gemini-devbox",
     "grok-bench",
     "node-ts",
+    "ollama-devbox",
     "python",
   ]);
 });
