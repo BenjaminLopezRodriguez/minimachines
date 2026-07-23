@@ -12,18 +12,36 @@ CLI — it does not replace the dashboard.
 
 ## What it does (exactly two things)
 
-1. **Notify by SMS.** Text the user's phone number when the agent:
+1. **Notify on event.** When the system monitoring the agent detects the agent:
    - has a **question** (blocked, needs a decision),
    - **finishes a task** the user was waiting on,
-   - **succeeds** (goal reached).
-   Nothing else. No status spam.
+   - **succeeds** (goal reached),
+   it messages the user by **SMS and/or email** (user's choice). Nothing else.
+   No status spam.
 
-2. **Link to talk back.** Every text contains a link. The link opens a minimal
-   page with exactly three controls:
+2. **Link to reply.** Every message contains a link to the **session-bound**
+   reply page. It opens a minimal mobile surface with exactly:
    - **Whisperflow voice input** — hold-to-talk, speech → text to the agent.
-   - **Intelligence dial** — pick the model/effort tier for the reply.
+   - **Take a photo** — camera capture (a screenshot, whiteboard, error on
+     another screen) sent to the agent as an image.
    - **Text input box** — type instead of talk.
-   That's the whole surface. Send → routed to the agent (VM session or CLI).
+   - **Intelligence dial** — pick the model/effort tier for the reply.
+   Send → routed straight to the agent that paged you (VM session or CLI).
+
+## Mobile edit flow (the end-to-end loop)
+
+```
+agent hits a question / finishes / succeeds
+   → monitor fires an event bound to the session
+   → user gets a text AND/OR email: one-line summary + reply link
+   → user taps link on their phone → session-linked reply page opens
+   → user talks (voice), snaps a photo, or types
+   → reply (+ chosen intelligence tier) lands in the agent's mailbox
+   → agent picks it up and continues
+```
+
+The link is the product: a phone, a session, three ways to answer. No app to
+install, no dashboard to log into — the message is the entry point.
 
 ## Non-goals (v1)
 
@@ -38,12 +56,15 @@ CLI — it does not replace the dashboard.
   event. Simplest: a new event type the agent emits, e.g.
   `POST /api/v1/machines/<id>/notify { kind: "question"|"finished"|"succeeded", text }`
   (Bearer API key — the machine already has one via device login).
-- **SMS out:** a provider (Twilio / Vercel-friendly). Send on notify. The
-  message body = short summary + the reply link.
+- **Notify out:** SMS via a provider (Twilio / Vercel-friendly) and/or email
+  (Resend). Send on notify. Body = short summary + the reply link.
 - **Reply link:** `https://www.minimachin.es/m/<token>` — a signed, expiring
-  token bound to (machine, user, event). Opens the 3-control page.
-- **Reply in:** the page posts voice-transcript / text back to the agent via
-  the same machine session (exec / a message queue the agent polls).
+  token bound to (machine/session, user, event). Opens the reply page.
+- **Photo in:** camera capture uploads to Vercel Blob (private); the agent
+  receives the URL/bytes as an image input.
+- **Reply in:** the page posts voice-transcript / text / photo back to the
+  agent via the machine session — a mailbox row the agent polls (cleaner than
+  injecting via exec).
 - **Intelligence dial:** maps to model/effort passed with the reply (the agent
   picks up the tier for its next step).
 
@@ -54,6 +75,10 @@ CLI — it does not replace the dashboard.
   a prompt? (Determines the trigger integration.)
 - Whisperflow: hosted STT vs on-device Web Speech API (ponytail: Web Speech
   API first — zero backend, browser-native).
+- Photo: `<input type="file" accept="image/*" capture="environment">` opens the
+  phone camera directly — no camera lib needed (ponytail).
+- Channels: SMS + email both, or let the user pick one at opt-in? Start with
+  both, one shared "reply link."
 - Reply delivery to a *running* agent: does the agent poll a mailbox, or do we
   inject via `execMachine`? A mailbox table the agent polls is the clean shape.
 - Phone number storage + verification (SMS opt-in / STOP compliance).
