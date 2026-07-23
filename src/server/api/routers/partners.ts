@@ -10,6 +10,7 @@ export const partnersRouter = createTRPCRouter({
   request: publicProcedure
     .input(
       z.object({
+        kind: z.enum(["agent", "model"]).default("agent"),
         company: z.string().trim().min(1, "Company is required.").max(200),
         email: z
           .string()
@@ -38,6 +39,7 @@ export const partnersRouter = createTRPCRouter({
       const [entry] = await ctx.db
         .insert(partnerRequests)
         .values({
+          kind: input.kind,
           company: input.company,
           email: input.email,
           agentName: input.agentName ?? null,

@@ -1,0 +1,1 @@
+ALTER TABLE "minimachines_partner_request" ADD COLUMN "kind" varchar(16) DEFAULT 'agent' NOT NULL;

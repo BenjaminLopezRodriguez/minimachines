@@ -21,11 +21,17 @@ export const waitlist = createTable(
   (t) => [uniqueIndex("waitlist_email_idx").on(t.email)],
 );
 
-/** Inbound requests from agent-builders who want their agent on the platform. */
+/**
+ * Inbound requests from partners. `kind` distinguishes agent-builders who want
+ * their agent on the platform from model providers who want to publish on the
+ * model market. `subjectName` holds the agent or model name accordingly.
+ */
 export const partnerRequests = createTable("partner_request", (d) => ({
   id: d.uuid().primaryKey().defaultRandom(),
+  kind: d.varchar({ length: 16 }).notNull().default("agent"),
   company: d.varchar({ length: 200 }).notNull(),
   email: d.varchar({ length: 320 }).notNull(),
+  // Agent name (kind=agent) or model name (kind=model).
   agentName: d.varchar({ length: 200 }),
   note: d.text(),
   createdAt: d

@@ -43,6 +43,13 @@
       "when": 1784849446170,
       "tag": "0005_faithful_bruce_banner",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784851073875,
+      "tag": "0006_magenta_lenny_balinger",
+      "breakpoints": true
     }
   ]
 }
