@@ -66,6 +66,8 @@ export const machines = createTable(
     templateId: d.varchar({ length: 128 }),
     dockerfile: d.varchar({ length: 256 }),
     emulatorUrl: d.varchar({ length: 512 }),
+    /** Modal sandbox backing this machine, when provisioned. */
+    sandboxId: d.varchar({ length: 128 }),
     ownerUserId: d.varchar({ length: 128 }),
     createdAt: d
       .timestamp({ withTimezone: true })

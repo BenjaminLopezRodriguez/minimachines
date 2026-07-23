@@ -15,6 +15,10 @@ export const env = createEnv({
     WORKOS_CLIENT_ID: z.string().startsWith("client_"),
     // Used to encrypt the session cookie — must be at least 32 characters.
     WORKOS_COOKIE_PASSWORD: z.string().min(32),
+    // Optional: when both are set, machines are provisioned as real Modal
+    // sandboxes. Unset (e.g. local dev) the app records machines only.
+    MODAL_TOKEN_ID: z.string().optional(),
+    MODAL_TOKEN_SECRET: z.string().optional(),
   },
 
   /**
@@ -33,6 +37,8 @@ export const env = createEnv({
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
+    MODAL_TOKEN_ID: process.env.MODAL_TOKEN_ID,
+    MODAL_TOKEN_SECRET: process.env.MODAL_TOKEN_SECRET,
     WORKOS_API_KEY: process.env.WORKOS_API_KEY,
     WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID,
     WORKOS_COOKIE_PASSWORD: process.env.WORKOS_COOKIE_PASSWORD,

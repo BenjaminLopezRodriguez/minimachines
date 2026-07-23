@@ -6,6 +6,7 @@ import { db } from "~/server/db";
 import { machines as machinesTable } from "~/server/db/schema";
 
 import type { Machine, MachineStatus } from "./machines";
+import { modalEnabled, provisionMachine, terminateMachine } from "./modal-driver";
 import { getTemplate, loadTemplates } from "./templates";
 
 type Row = typeof machinesTable.$inferSelect;
@@ -87,6 +88,27 @@ export async function createMachine(
       ? `${template.name}: ${task}`
       : `${agent} · ${task}`.slice(0, 80);
 
+  // Provision real compute when Modal is configured. A provisioning failure
+  // is recorded as an `error` machine rather than losing the row entirely —
+  // the user needs to see that the machine exists and why it is unusable.
+  let sandboxId: string | undefined;
+  let emulatorUrl: string | undefined;
+  let status: MachineStatus = "running";
+
+  if (modalEnabled()) {
+    try {
+      const provisioned = await provisionMachine({
+        cpu: template.resources.cpu,
+        memoryGb: template.resources.memoryGb,
+      });
+      sandboxId = provisioned.sandboxId;
+      emulatorUrl = provisioned.emulatorUrl ?? undefined;
+    } catch (err) {
+      console.error("[minimachines] Modal provisioning failed", err);
+      status = "error";
+    }
+  }
+
   const [row] = await db
     .insert(machinesTable)
     .values({
@@ -95,14 +117,16 @@ export async function createMachine(
       title,
       agent,
       task,
-      status: "running",
-      region: "us-west-2",
+      status,
+      region: modalEnabled() ? "modal" : "us-west-2",
       cpu: template.resources.cpu,
       memoryGb: template.resources.memoryGb,
       uptime: "0m",
       lastActive: "just now",
       templateId: template.id,
       dockerfile: template.dockerfile,
+      emulatorUrl,
+      sandboxId,
       ownerUserId: input.ownerUserId,
     })
     .returning();
@@ -121,10 +145,25 @@ export async function stopMachine(
         eq(machinesTable.ownerUserId, filter.ownerUserId),
       )
     : eq(machinesTable.id, id);
+  // Mark stopped first: the DB is the source of truth the user sees, and a
+  // Modal hiccup must not leave a machine looking "running" forever. The
+  // console URL is cleared because the tunnel dies with the sandbox.
   const [row] = await db
     .update(machinesTable)
-    .set({ status: "stopped", lastActive: "just now" })
+    .set({ status: "stopped", lastActive: "just now", emulatorUrl: null })
     .where(where)
     .returning();
-  return row ? toMachine(row) : null;
+  if (!row) return null;
+
+  if (row.sandboxId && modalEnabled()) {
+    try {
+      await terminateMachine(row.sandboxId);
+    } catch (err) {
+      // Sandboxes also expire on their own timeout, so a failure here leaks
+      // at most one sandbox until then.
+      console.error("[minimachines] Modal terminate failed", row.sandboxId, err);
+    }
+  }
+
+  return toMachine(row);
 }
