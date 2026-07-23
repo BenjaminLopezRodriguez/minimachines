@@ -234,6 +234,21 @@ async function run(machineId: string) {
 
 // --- auth commands ----------------------------------------------------------
 
+async function chooseLoginMethod(): Promise<
+  "browser" | "browser-no-open" | "paste"
+> {
+  process.stdout.write(
+    "\nHow do you want to sign in?\n" +
+      "  1) Browser — approve in your dashboard (default)\n" +
+      "  2) Use an API key — for agents, CI, or remote/headless\n" +
+      "  3) Browser, but show me the link (don't auto-open)\n",
+  );
+  const answer = (await promptLine("Choice [1]: ")).trim();
+  if (answer === "2") return "paste";
+  if (answer === "3") return "browser-no-open";
+  return "browser";
+}
+
 async function loginPaste() {
   const key = (await promptLine("Paste your mm_ API key: ")).trim();
   if (!key) {
@@ -368,8 +383,20 @@ async function main() {
   }
   if (cmd === "login") {
     const rest = args.slice(1);
-    if (rest.includes("--paste")) await loginPaste();
-    else await loginDevice(rest.includes("--no-open"));
+    // Explicit flags win — agents and scripts skip the prompt.
+    if (rest.includes("--paste")) {
+      await loginPaste();
+    } else if (rest.includes("--no-open")) {
+      await loginDevice(true);
+    } else if (process.stdin.isTTY) {
+      // Interactive human: let them choose. Non-TTY falls through to the
+      // browser device flow (default) so piped/agent use is unchanged.
+      const choice = await chooseLoginMethod();
+      if (choice === "paste") await loginPaste();
+      else await loginDevice(choice === "browser-no-open");
+    } else {
+      await loginDevice(false);
+    }
     return;
   }
   if (cmd === "logout") {
