@@ -5,6 +5,7 @@
   "type": "module",
   "bin": {
     "minimachines": "dist/cli.js",
+    "mm": "dist/cli.js",
     "cli": "dist/cli.js"
   },
   "files": [

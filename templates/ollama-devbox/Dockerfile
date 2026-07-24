@@ -1,38 +1,30 @@
 FROM debian:bookworm-slim
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl git python3 \
+  && apt-get install -y --no-install-recommends ca-certificates curl tar git python3 \
   && rm -rf /var/lib/apt/lists/*
 
 # Ollama targets glibc (Debian), not musl — Alpine is unreliable for it, so we
-# stay on bookworm-slim. The install script prints a systemd warning inside a
-# container; that is harmless, the binary still lands in /usr/local/bin/ollama.
-RUN curl -fsSL https://ollama.com/install.sh | sh
+# stay on bookworm-slim. Install the release tarball directly rather than the
+# install.sh script: the script's systemd/user setup exits non-zero in a
+# minimal container image and fails the build. The tarball is the same binary.
+RUN curl -fsSL https://ollama.com/download/ollama-linux-amd64.tgz -o /tmp/ollama.tgz \
+  && tar -C /usr/local -xzf /tmp/ollama.tgz \
+  && rm /tmp/ollama.tgz
 
 # Runtime launcher: start the Ollama API, wait until it answers, then pull the
 # coding model. Models are multi-GB, so they are pulled AT RUNTIME and never
 # baked into the image — this keeps the image small and the model swappable.
-RUN cat > /usr/local/bin/mm-ollama-start <<'EOF' \
-&& chmod +x /usr/local/bin/mm-ollama-start
-#!/usr/bin/env bash
-set -euo pipefail
-
-MODEL="${OLLAMA_MODEL:-qwen2.5-coder:1.5b}"
-
-# Serve the Ollama API in the background.
-ollama serve &
-
-# Wait for the API to accept connections before pulling.
-until curl -fsS http://127.0.0.1:11434/ >/dev/null 2>&1; do
-  sleep 1
-done
-
-# Pull the small coding LLM at runtime (never baked — models are GB).
-ollama pull "$MODEL"
-
-# Drop into a shell; ollama serve keeps running in the background.
-exec bash
-EOF
+RUN printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'MODEL="${OLLAMA_MODEL:-qwen2.5-coder:1.5b}"' \
+  'ollama serve &' \
+  'until curl -fsS http://127.0.0.1:11434/ >/dev/null 2>&1; do sleep 1; done' \
+  'ollama pull "$MODEL"' \
+  'exec bash' \
+  > /usr/local/bin/mm-ollama-start \
+  && chmod +x /usr/local/bin/mm-ollama-start
 
 RUN useradd --create-home --shell /bin/bash agent \
   && mkdir -p /workspace \

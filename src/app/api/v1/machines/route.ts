@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isApiAuth, requireApiKey } from "~/server/api/v1/auth";
 import { jsonError, jsonOk } from "~/server/api/v1/respond";
 import { createMachine, listMachines } from "~/server/data/machine-store";
+import { loadTemplates } from "~/server/data/templates";
 
 export async function GET(request: Request) {
   const auth = await requireApiKey(request);
@@ -31,7 +32,15 @@ export async function POST(request: Request) {
     })
     .safeParse(body);
   if (!parsed.success) {
-    return jsonError("validation_error", "Invalid create payload", 400);
+    const known = loadTemplates()
+      .map((t) => t.id)
+      .join(", ");
+    const field = parsed.error.issues[0]?.path.join(".") ?? "body";
+    return jsonError(
+      "validation_error",
+      `Invalid create payload: "${field}" is required. templateId must be one of: ${known}`,
+      400,
+    );
   }
 
   try {

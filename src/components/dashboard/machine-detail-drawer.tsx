@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Copy,
   ExternalLink,
+  Globe,
   RotateCcw,
   Square,
   Terminal,
@@ -295,6 +296,25 @@ function QuickActions({
             >
               <Terminal className="size-3.5 shrink-0 opacity-70" aria-hidden />
               Open console
+              <ExternalLink
+                className="ml-auto size-3 shrink-0 opacity-40"
+                aria-hidden
+              />
+            </a>
+          </li>
+        )}
+
+        {/* App served by the machine on port 3000, when running. */}
+        {running && machine.appUrl && (
+          <li>
+            <a
+              href={machine.appUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={actionRow}
+            >
+              <Globe className="size-3.5 shrink-0 opacity-70" aria-hidden />
+              Open app
               <ExternalLink
                 className="ml-auto size-3 shrink-0 opacity-40"
                 aria-hidden

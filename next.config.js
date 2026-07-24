@@ -10,6 +10,7 @@ const config = {
   outputFileTracingIncludes: {
     "/dashboard": ["./templates/**/*"],
     "/api/trpc/[trpc]": ["./templates/**/*"],
+    "/api/v1/machines": ["./templates/**/*"],
   },
 };
 

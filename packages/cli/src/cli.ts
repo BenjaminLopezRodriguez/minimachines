@@ -498,6 +498,15 @@ async function main() {
     whoami();
     return;
   }
+  // Distinguish an unknown command from a known one missing its args, so a
+  // user on an older CLI learns to upgrade instead of re-reading usage.
+  const known = ["run", "agent", "login", "logout", "whoami"];
+  if (cmd && !known.includes(cmd)) {
+    console.error(
+      `Unknown command "${cmd}". If a guide told you to run it, your CLI may ` +
+        `be out of date:\n  npm i -g @minimachines/cli@latest\n`,
+    );
+  }
   usage();
 }
 

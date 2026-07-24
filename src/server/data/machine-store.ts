@@ -31,6 +31,7 @@ function toMachine(row: Row): Machine {
     templateId: row.templateId ?? undefined,
     dockerfile: row.dockerfile ?? undefined,
     emulatorUrl: row.emulatorUrl ?? undefined,
+    appUrl: row.appUrl ?? undefined,
     ownerUserId: row.ownerUserId ?? undefined,
   };
 }
@@ -97,6 +98,7 @@ export async function createMachine(
   // the user needs to see that the machine exists and why it is unusable.
   let sandboxId: string | undefined;
   let emulatorUrl: string | undefined;
+  let appUrl: string | undefined;
   let status: MachineStatus = "running";
 
   if (modalEnabled()) {
@@ -104,9 +106,11 @@ export async function createMachine(
       const provisioned = await provisionMachine({
         cpu: template.resources.cpu,
         memoryGb: template.resources.memoryGb,
+        dockerfile: template.dockerfile,
       });
       sandboxId = provisioned.sandboxId;
       emulatorUrl = provisioned.emulatorUrl ?? undefined;
+      appUrl = provisioned.appUrl ?? undefined;
     } catch (err) {
       console.error("[minimachines] Modal provisioning failed", err);
       status = "error";
@@ -130,6 +134,7 @@ export async function createMachine(
       templateId: template.id,
       dockerfile: template.dockerfile,
       emulatorUrl,
+      appUrl,
       sandboxId,
       ownerUserId: input.ownerUserId,
     })
@@ -154,7 +159,12 @@ export async function stopMachine(
   // console URL is cleared because the tunnel dies with the sandbox.
   const [row] = await db
     .update(machinesTable)
-    .set({ status: "stopped", lastActive: "just now", emulatorUrl: null })
+    .set({
+      status: "stopped",
+      lastActive: "just now",
+      emulatorUrl: null,
+      appUrl: null,
+    })
     .where(where)
     .returning();
   if (!row) return null;
@@ -204,12 +214,18 @@ export async function restartMachine(
 
   let sandboxId: string | null = null;
   let emulatorUrl: string | null = null;
+  let appUrl: string | null = null;
   let status: MachineStatus = "running";
   if (modalEnabled()) {
     try {
-      const p = await provisionMachine({ cpu: row.cpu, memoryGb: row.memoryGb });
+      const p = await provisionMachine({
+        cpu: row.cpu,
+        memoryGb: row.memoryGb,
+        dockerfile: row.dockerfile ?? undefined,
+      });
       sandboxId = p.sandboxId;
       emulatorUrl = p.emulatorUrl ?? null;
+      appUrl = p.appUrl ?? null;
     } catch (err) {
       console.error("[minimachines] restart: provision failed", err);
       status = "error";
@@ -218,7 +234,14 @@ export async function restartMachine(
 
   const [updated] = await db
     .update(machinesTable)
-    .set({ status, sandboxId, emulatorUrl, uptime: "0m", lastActive: "just now" })
+    .set({
+      status,
+      sandboxId,
+      emulatorUrl,
+      appUrl,
+      uptime: "0m",
+      lastActive: "just now",
+    })
     .where(eq(machinesTable.id, row.id))
     .returning();
   return updated ? toMachine(updated) : null;

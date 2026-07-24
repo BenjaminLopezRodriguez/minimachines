@@ -21,6 +21,8 @@ export type Machine = {
    * tunnel/subdomain, e.g. `https://mm-<id>.minimachin.es/emulator`.
    */
   emulatorUrl?: string;
+  /** Public URL to the app the machine serves on port 3000, when running. */
+  appUrl?: string;
   /** WorkOS user id (or API key owner). */
   ownerUserId?: string;
 };

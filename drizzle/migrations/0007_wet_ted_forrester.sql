@@ -1,0 +1,1 @@
+ALTER TABLE "minimachines_machine" ADD COLUMN "appUrl" varchar(512);

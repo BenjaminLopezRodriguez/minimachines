@@ -50,6 +50,13 @@
       "when": 1784851073875,
       "tag": "0006_magenta_lenny_balinger",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784878160136,
+      "tag": "0007_wet_ted_forrester",
+      "breakpoints": true
     }
   ]
 }

@@ -152,7 +152,7 @@
       "agents": ["ollama"],
       "resources": { "cpu": 4, "memoryGb": 4 },
       "dockerfile": "ollama-devbox/Dockerfile",
-      "status": "ready"
+      "status": "experimental"
     }
   ]
 }
