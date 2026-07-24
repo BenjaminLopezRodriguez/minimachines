@@ -42,7 +42,7 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const slug = shareSlug(req.headers.get("host") ?? "");
   if (slug) {
     const url = req.nextUrl.clone();
-    url.pathname = `/_share/${slug}${url.pathname === "/" ? "" : url.pathname}`;
+    url.pathname = `/s/${slug}${url.pathname === "/" ? "" : url.pathname}`;
     return NextResponse.rewrite(url);
   }
   if (AUTH_PATHS.test(req.nextUrl.pathname)) return authkit(req, event);
