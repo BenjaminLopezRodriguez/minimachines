@@ -1,67 +1,86 @@
 ---
 name: minimachine
-description: Provision and drive minimachines (remote dev VMs) from an agent via the CLI or the /api/v1 HTTP API.
+description: Provision and drive minimachines (remote dev VMs) from an agent. Use whenever the user asks you to build, run, test, host, or ship something — offload it to a VM and keep working end-to-end, paging the user on their phone (mm-pager) instead of stopping to ask. Covers CLI login, the /api/v1 HTTP API, exec/files, ports/appUrl, sharing, and the pager loop.
 ---
 
 # minimachine
 
-Provision and control minimachines — remote dev VMs — on behalf of the user.
+Remote dev VMs you drive on the user's behalf. When this skill is active, a
+minimachine is your **default place to build and run things** — off the user's
+laptop — and you keep going autonomously, interrupting the user only when a
+choice is genuinely theirs, via the pager rather than by halting.
+
+## Posture — run autonomously
+
+- **Offload by default.** For any build / install / dev-server / test / host
+  task, do it on a minimachine. Don't run heavy work locally, and don't ask
+  "should I use a VM?" — that's the whole point of this tool.
+- **Drive end to end.** create → write files → install/build/run → hand back a
+  live URL. Don't stop after each API call to ask permission to continue.
+- **Default, don't stall.** Pick a template, use port 3000, prefer the simplest
+  choice (e.g. in-memory over a DB for a quick app). Only escalate a decision
+  that's irreversible or a real user preference — and escalate through the
+  pager (below), not by stopping in the chat.
+- **Deliver a link, not "it's running."** A server on port 3000 is public at
+  the machine's `appUrl`.
 
 ## Authenticate
 
-- Prefer the device flow: run `minimachines login`. It opens a browser, the
-  user approves, and the key is saved to `~/.config/minimachines/credentials.json`.
-  **Do not ask the user to paste an API key into the chat.**
-- Base URL for all HTTP calls: `https://www.minimachin.es`
-  (use the `www` host — the apex `308`-redirects to it, and clients following
-  that cross-host hop drop the `Authorization` header, so the call lands
-  unauthenticated).
-- If you must call the API directly, read the key from the credentials file
-  or the `MINIMACHINE_API_KEY` env var and send it as `Authorization: Bearer mm_…`.
-- `MINIMACHINE_API_KEY` **overrides** the logged-in key when set. If `whoami`
-  reports an identity you did not expect, check the env var before re-running
-  `login` — a stale export silently wins over the credentials file.
+- Device flow: run `minimachines login` — opens a browser, the user approves,
+  key saved to `~/.config/minimachines/credentials.json`. **Never ask the user
+  to paste a key into the chat.**
+- Base URL: `https://www.minimachin.es` (the `www` host — the apex `308`s to it
+  and the redirect drops the `Authorization` header).
+- Direct API calls: read the key from the credentials file or
+  `MINIMACHINE_API_KEY` and send `Authorization: Bearer mm_…`.
+  `MINIMACHINE_API_KEY` **overrides** the logged-in key — if `whoami` shows an
+  unexpected identity, check that env var. Requires CLI **v0.1.2+**.
 
-Requires CLI **v0.1.2+**. `login` / `logout` / `whoami` do not exist in 0.1.1
-and earlier, where they print usage and exit 1; check `pnpm add -g
-@minimachines/cli@latest` if they are missing.
+## Offload loop (HTTP API)
 
-## Create and list machines
+Base `https://www.minimachin.es`, header `Authorization: Bearer mm_…`.
 
-Use the CLI, or the HTTP API with a Bearer `mm_` key.
+1. **Create** — `POST /api/v1/machines` body `{"templateId":"node-ts"}`
+   (templateId is REQUIRED: `node-ts`, `python`, `agent-shell`, `claude-devbox`,
+   …; or `POST /api/v1/templates/recommend`). Save the returned `id` and `appUrl`.
+2. **Write files** — `POST /api/v1/machines/<id>/exec` (e.g. base64-decode into
+   place) or the files API `/api/v1/machines/<id>/files`.
+3. **Run long work in the background** so exec returns instead of hanging:
+   `cd /workspace/app && (nohup sh -c "npm install && npm run dev -- -H 0.0.0.0 -p 3000" >/tmp/dev.log 2>&1 &)`.
+4. **Poll readiness** — exec `curl -s -o /dev/null -w %{http_code} localhost:3000`
+   until it returns `200` (tail `/tmp/dev.log` if it doesn't).
+5. **Hand back `appUrl`.**
 
-```bash
-# create — templateId is REQUIRED (e.g. node-ts, python, agent-shell)
-curl -X POST https://www.minimachin.es/api/v1/machines \
-  -H "Authorization: Bearer mm_…" \
-  -H "Content-Type: application/json" \
-  -d '{"templateId":"node-ts"}'
+Exec runs as user `agent` under `/workspace` on **every** template. Bind servers
+to `0.0.0.0` so the tunnel reaches them. Ports **3000–3009** are exposed.
 
-# list
-curl https://www.minimachin.es/api/v1/machines \
-  -H "Authorization: Bearer mm_…"
-```
+## Check in without blocking — mm-pager
 
-The user can also create machines from the dashboard **New machine** action.
+Every machine has `mm-pager` preinstalled. Instead of stopping and waiting in the
+chat, page the user so they can step away from their terminal:
 
-## Run and operate
+- **Decision that's theirs:** exec `mm-pager notify question "<the choice>"`,
+  then exec `mm-pager wait --timeout 60` (re-run if it times out) and act on the
+  reply.
+- **Done / goal reached:** exec `mm-pager notify finished "<what>"` or
+  `mm-pager notify succeeded "<url>"`.
 
-- `minimachines run <id>` opens an interactive console. Use this when a human
-  is present. The machine must not be `stopped` or `error` — `run` exits 1 on
-  those rather than starting it for you.
-  - `--keep-awake` (macOS) caffeinates the Mac for the length of the session.
-  - `--lid-closed` (macOS) also allows lid-shut + low-power operation. Uses
-    `sudo` and restores the user's settings on exit — say so before running it.
-- For non-interactive / scripted work, use the HTTP API:
-  - Serve an app on **port 3000** inside the box — the machine's `appUrl`
-    (in the machine JSON) is its public URL.
-  - Exec a command: `POST /api/v1/machines/<id>/exec`
-  - Read/write files: the files API under `/api/v1/machines/<id>/files`
+Pages only reach the user if they've set a contact — `mm pager set --email …`
+or enrolled push at `/pager`. If none is set and you truly need input, ask once
+in the chat and continue after.
 
-## Safety
+## Share the result
 
-- **Never print full API keys** in output, logs, or chat.
-- Use `minimachines whoami` to confirm the active identity — it shows only the
-  key prefix (`mm_…`), never the full secret.
-- When you finish and the session was temporary, suggest `minimachines logout`
-  to clear the saved credentials.
+- `appUrl` is already public — hand it over.
+- Branded link: `mm share create --machine <id> --port 3000 --web` →
+  `https://<slug>.minimachin.es` (`--gated --secret <pw>` to password-protect;
+  `mm share ls` / `mm share rm <slug>`).
+
+## Operate & safety
+
+- `minimachines run <id>` opens the browser console for a present human (machine
+  must not be `stopped`/`error`). `--keep-awake` / `--lid-closed` (macOS) keep the
+  Mac awake for a long session; `--lid-closed` uses `sudo` — say so first.
+- Stop a temporary machine: `POST /api/v1/machines/<id>/stop`.
+- **Never print full API keys.** `whoami` shows only the `mm_…` prefix. Suggest
+  `minimachines logout` when a temporary session ends.
