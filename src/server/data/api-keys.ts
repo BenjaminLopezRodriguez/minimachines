@@ -93,6 +93,32 @@ export async function revokeApiKey(input: {
   return revoked.length > 0;
 }
 
+/** Mint a machine-scoped key for the in-sandbox agent (pager, exec). */
+export async function createAgentKey(
+  userId: string,
+  machineId: string,
+): Promise<string> {
+  const { secret } = await createApiKey({ userId, label: `agent:${machineId}` });
+  return secret;
+}
+
+/** Revoke the machine-scoped key(s) when the sandbox goes away. */
+export async function revokeAgentKey(
+  userId: string,
+  machineId: string,
+): Promise<void> {
+  await db
+    .update(apiKeys)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(
+        eq(apiKeys.userId, userId),
+        eq(apiKeys.label, `agent:${machineId}`),
+        isNull(apiKeys.revokedAt),
+      ),
+    );
+}
+
 export async function verifyApiKey(
   secret: string,
 ): Promise<{ userId: string; keyId: string } | null> {

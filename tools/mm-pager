@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""mm-pager — page your human from inside a minimachine, wait for the reply.
+
+Auto-installed into every sandbox. Authenticates with the machine's scoped key,
+injected as env at provision time:
+  MINIMACHINE_API_KEY   the machine's mm_ key (owner-scoped)
+  MINIMACHINE_BASE_URL  e.g. https://www.minimachin.es
+  MM_MACHINE_ID         this machine's id
+
+Verbs (the baton loop, over HTTP):
+  mm-pager notify <question|finished|succeeded> [text]   emit a page (SMS/email)
+  mm-pager wait [--timeout N]                            poll mailbox, print reply
+  mm-pager on | off                                      arm/disarm the Stop hook
+  mm-pager hook                                          Claude Code Stop hook
+  mm-pager selftest
+
+`wait` exits 0 with the reply on stdout, 2 on timeout. Pure stdlib.
+"""
+import argparse, json, os, sys, time, urllib.error, urllib.request
+from pathlib import Path
+
+ARM = Path.home() / ".mm-pager-armed"
+DEFAULT_TEXT = {
+    "question": "Your agent has a question.",
+    "finished": "Your agent finished the task.",
+    "succeeded": "Your agent reached the goal.",
+}
+
+
+def _cfg():
+    key = os.environ.get("MINIMACHINE_API_KEY", "")
+    base = os.environ.get("MINIMACHINE_BASE_URL", "https://www.minimachin.es").rstrip("/")
+    mid = os.environ.get("MM_MACHINE_ID", "")
+    return key, base, mid
+
+
+def _req(method, path, key, body=None):
+    url = f"{path}"
+    data = json.dumps(body).encode() if body is not None else None
+    r = urllib.request.Request(url, data=data, method=method)
+    r.add_header("authorization", f"Bearer {key}")
+    if data is not None:
+        r.add_header("content-type", "application/json")
+    with urllib.request.urlopen(r, timeout=30) as resp:
+        raw = resp.read().decode()
+        return resp.status, (json.loads(raw) if raw else {})
+
+
+def cmd_notify(a):
+    key, base, mid = _cfg()
+    if not key or not mid:
+        sys.stderr.write("mm-pager: not configured (no key/machine id)\n")
+        return 1
+    text = " ".join(a.text) if a.text else DEFAULT_TEXT[a.kind]
+    try:
+        status, _ = _req("POST", f"{base}/api/v1/machines/{mid}/notify", key,
+                         {"kind": a.kind, "text": text})
+    except urllib.error.HTTPError as e:
+        sys.stderr.write(f"mm-pager: notify failed ({e.code}) {e.read().decode()[:200]}\n")
+        return 1
+    sys.stderr.write(f"paged ({a.kind})\n")
+    return 0
+
+
+def _poll_once(base, key, mid):
+    status, body = _req("GET", f"{base}/api/v1/machines/{mid}/mailbox", key)
+    replies = body.get("replies") or []
+    return replies[0]["body"] if replies else None
+
+
+def cmd_wait(a):
+    key, base, mid = _cfg()
+    if not key or not mid:
+        sys.stderr.write("mm-pager: not configured\n")
+        return 1
+    sys.stderr.write("\a⏳ waiting for reply…\n")
+    deadline = time.time() + a.timeout if a.timeout else None
+    while True:
+        try:
+            reply = _poll_once(base, key, mid)
+        except urllib.error.URLError as e:
+            sys.stderr.write(f"mm-pager: poll error {e}; retrying\n")
+            reply = None
+        if reply is not None:
+            sys.stdout.write(reply if reply.endswith("\n") else reply + "\n")
+            return 0
+        if deadline and time.time() >= deadline:
+            sys.stderr.write("timeout\n")
+            return 2
+        time.sleep(2)  # ponytail: 2s poll; SSE/webhook if latency ever matters
+
+
+def cmd_on(a):
+    ARM.write_text(str(time.time()))
+    sys.stderr.write("pager loop armed\n")
+    return 0
+
+
+def cmd_off(a):
+    ARM.unlink(missing_ok=True)
+    sys.stderr.write("pager loop disarmed\n")
+    return 0
+
+
+def cmd_hook(a):
+    # Claude Code Stop hook. Inert unless armed, so ordinary runs aren't paged.
+    try:
+        sys.stdin.read()
+    except Exception:
+        pass
+    if not ARM.exists():
+        return 0
+    if cmd_notify(argparse.Namespace(kind="finished", text=None)) != 0:
+        return 0
+    key, base, mid = _cfg()
+    while True:
+        try:
+            reply = _poll_once(base, key, mid)
+        except urllib.error.URLError:
+            reply = None
+        if reply is not None:
+            print(json.dumps({"decision": "block", "reason": reply}))
+            return 0
+        time.sleep(2)
+
+
+def cmd_selftest(a):
+    # ponytail: one runnable check with no network — config + text defaults.
+    os.environ["MM_MACHINE_ID"] = "vm_test"
+    os.environ["MINIMACHINE_API_KEY"] = "mm_test"
+    key, base, mid = _cfg()
+    assert key and mid and base.startswith("http"), "config parse broke"
+    assert DEFAULT_TEXT["question"] and DEFAULT_TEXT["succeeded"], "defaults missing"
+    print("ok")
+    return 0
+
+
+def main():
+    p = argparse.ArgumentParser(prog="mm-pager", description=__doc__.splitlines()[0])
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    n = sub.add_parser("notify", help="emit a page")
+    n.add_argument("kind", choices=["question", "finished", "succeeded"])
+    n.add_argument("text", nargs="*", help="message (defaults per kind)")
+    n.set_defaults(fn=cmd_notify)
+
+    w = sub.add_parser("wait", help="poll mailbox, print reply")
+    w.add_argument("--timeout", type=float, default=0.0)
+    w.set_defaults(fn=cmd_wait)
+
+    sub.add_parser("on", help="arm the Stop hook").set_defaults(fn=cmd_on)
+    sub.add_parser("off", help="disarm the Stop hook").set_defaults(fn=cmd_off)
+    sub.add_parser("hook", help="Claude Code Stop hook").set_defaults(fn=cmd_hook)
+    sub.add_parser("selftest").set_defaults(fn=cmd_selftest)
+
+    a = p.parse_args()
+    sys.exit(a.fn(a))
+
+
+if __name__ == "__main__":
+    main()

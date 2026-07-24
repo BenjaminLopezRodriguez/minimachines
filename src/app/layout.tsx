@@ -14,6 +14,8 @@ export const metadata: Metadata = {
   description:
     "Run the heavy compute of agentic software development in the cloud. Claude, Codex, Grok, Cursor, and more — each in a dedicated VM.",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "minimachines" },
   openGraph: {
     title: "minimachines",
     description:

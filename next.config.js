@@ -6,11 +6,12 @@ import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
 const config = {
-  // Keep AI template Dockerfiles + manifest available to serverless tracing.
+  // Keep AI template Dockerfiles + the mm-pager tools available to serverless
+  // tracing — the provisioner reads both from disk when building sandbox images.
   outputFileTracingIncludes: {
-    "/dashboard": ["./templates/**/*"],
-    "/api/trpc/[trpc]": ["./templates/**/*"],
-    "/api/v1/machines": ["./templates/**/*"],
+    "/dashboard": ["./templates/**/*", "./tools/**"],
+    "/api/trpc/[trpc]": ["./templates/**/*", "./tools/**"],
+    "/api/v1/machines": ["./templates/**/*", "./tools/**"],
   },
 };
 

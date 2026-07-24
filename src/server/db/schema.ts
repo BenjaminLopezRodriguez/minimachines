@@ -90,6 +90,8 @@ export const machines = createTable(
     /** Modal sandbox backing this machine, when provisioned. */
     sandboxId: d.varchar({ length: 128 }),
     ownerUserId: d.varchar({ length: 128 }),
+    /** Exposed port → public tunnel URL, captured at provision (for shares). */
+    ports: d.jsonb(),
     createdAt: d
       .timestamp({ withTimezone: true })
       .$defaultFn(() => new Date())
@@ -183,4 +185,120 @@ export const jobs = createTable(
       .notNull(),
   }),
   (t) => [index("job_owner_idx").on(t.ownerUserId)],
+);
+
+/**
+ * Agent Pager — one notification contact per machine owner. Pager stays inert
+ * until a row exists here. v1 uses `email`; `phone`/SMS is deferred.
+ */
+export const pagerContacts = createTable("pager_contact", (d) => ({
+  ownerUserId: d.varchar({ length: 128 }).primaryKey(),
+  email: d.varchar({ length: 320 }),
+  phone: d.varchar({ length: 32 }),
+  emailVerifiedAt: d.timestamp({ withTimezone: true }),
+  phoneVerifiedAt: d.timestamp({ withTimezone: true }),
+  channels: d.varchar({ length: 16 }).notNull().default("email"),
+  createdAt: d
+    .timestamp({ withTimezone: true })
+    .$defaultFn(() => new Date())
+    .notNull(),
+}));
+
+/**
+ * A page emitted by an in-sandbox agent (`question`/`finished`/`succeeded`).
+ * The reply link carries a random token; only its sha256 is stored, and the
+ * event is single-use (`consumedAt`) and expiring (`expiresAt`) — no replay.
+ */
+export const pagerEvents = createTable(
+  "pager_event",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    machineId: d.varchar({ length: 64 }).notNull(),
+    ownerUserId: d.varchar({ length: 128 }).notNull(),
+    kind: d.varchar({ length: 16 }).notNull(),
+    text: d.text().notNull(),
+    tokenHash: d.varchar({ length: 64 }).notNull(),
+    expiresAt: d.timestamp({ withTimezone: true }).notNull(),
+    consumedAt: d.timestamp({ withTimezone: true }),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [uniqueIndex("pager_event_token_idx").on(t.tokenHash)],
+);
+
+/** Replies from the phone reply page, polled + drained by the agent. */
+export const mailbox = createTable(
+  "mailbox",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    machineId: d.varchar({ length: 64 }).notNull(),
+    ownerUserId: d.varchar({ length: 128 }).notNull(),
+    eventId: d.uuid(),
+    body: d.text().notNull(),
+    model: d.varchar({ length: 64 }),
+    imageUrl: d.varchar({ length: 512 }),
+    deliveredAt: d.timestamp({ withTimezone: true }),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [index("mailbox_poll_idx").on(t.machineId, t.deliveredAt)],
+);
+
+/**
+ * A branded, shareable link (`<slug>.minimachin.es`) that proxies to a web
+ * project's port. Origin is a minimachines machine port (tunnel resolved
+ * server-side) or a validated local tunnel URL. Public or Basic-auth gated;
+ * revoke = `enabled=false`. Gate secret is stored hash-only.
+ */
+export const shares = createTable(
+  "share",
+  (d) => ({
+    slug: d.varchar({ length: 32 }).primaryKey(),
+    ownerUserId: d.varchar({ length: 128 }).notNull(),
+    originKind: d.varchar({ length: 16 }).notNull(), // machine | local
+    originUrl: d.text().notNull(),
+    machineId: d.varchar({ length: 64 }),
+    port: d.integer(),
+    label: d.varchar({ length: 128 }).notNull().default(""),
+    kind: d.varchar({ length: 16 }).notNull().default("website"), // api | website
+    access: d.varchar({ length: 16 }).notNull().default("public"), // public | gated
+    secretHash: d.varchar({ length: 64 }),
+    enabled: d.boolean().notNull().default(true),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+    lastUsedAt: d.timestamp({ withTimezone: true }),
+  }),
+  (t) => [index("share_owner_idx").on(t.ownerUserId)],
+);
+
+/**
+ * Web Push (VAPID) subscriptions for native pager notifications. `kind` is
+ * `webpush` today; a future native iOS app registers `apns` device tokens
+ * against the same table so the notify fan-out is unchanged.
+ */
+export const pushSubscriptions = createTable(
+  "push_subscription",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    ownerUserId: d.varchar({ length: 128 }).notNull(),
+    kind: d.varchar({ length: 16 }).notNull().default("webpush"),
+    endpoint: d.text().notNull(),
+    p256dh: d.varchar({ length: 256 }).notNull(),
+    auth: d.varchar({ length: 128 }).notNull(),
+    ua: d.varchar({ length: 256 }),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    uniqueIndex("push_endpoint_idx").on(t.endpoint),
+    index("push_owner_idx").on(t.ownerUserId),
+  ],
 );

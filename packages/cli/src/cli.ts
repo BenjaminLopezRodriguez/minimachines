@@ -52,6 +52,11 @@ function usage(): never {
   minimachines login [--no-open] [--paste]
   minimachines logout
   minimachines whoami
+  minimachines pager set --email you@example.com | --phone +15551234567
+  minimachines pager status
+  minimachines share create --machine <id> --port <n> [--api|--web] [--public|--gated] [--secret <s>]
+  minimachines share --local <port> [--api|--web] [--public|--gated] [--secret <s>]
+  minimachines share ls | rm <slug>
   mm run <machineId>
 
 Run flags (macOS):
@@ -446,6 +451,166 @@ async function logout() {
   console.log("Logged out.");
 }
 
+// --- pager commands ---------------------------------------------------------
+
+async function pagerSet(email?: string, phone?: string) {
+  if (!email && !phone) {
+    console.error("Provide --email or --phone.");
+    process.exit(1);
+  }
+  const res = await fetch(`${baseUrl()}/api/v1/pager/contact`, {
+    method: "PUT",
+    headers: {
+      authorization: `Bearer ${apiKey()}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ email, phone }),
+  });
+  if (!res.ok) {
+    console.error(`Could not save contact: ${await errorMessage(res)}`);
+    process.exit(1);
+  }
+  console.log("Pager contact saved. Your agents can now page you.");
+}
+
+async function pagerStatus() {
+  const res = await fetch(`${baseUrl()}/api/v1/pager/contact`, {
+    headers: { authorization: `Bearer ${apiKey()}` },
+  });
+  if (!res.ok) {
+    console.error(await errorMessage(res));
+    process.exit(1);
+  }
+  const { contact } = (await res.json()) as {
+    contact: { email?: string | null; phone?: string | null } | null;
+  };
+  if (!contact) {
+    console.log(
+      "Pager: off (no contact). Add one: mm pager set --email you@example.com",
+    );
+    return;
+  }
+  console.log(
+    `Pager: on   email=${contact.email ?? "-"}   phone=${contact.phone ?? "-"}`,
+  );
+}
+
+// --- share commands ---------------------------------------------------------
+
+type ShareBody = {
+  originKind: "machine" | "local";
+  machineId?: string;
+  port?: number;
+  localUrl?: string;
+  kind: "api" | "website";
+  access: "public" | "gated";
+  secret?: string;
+  label?: string;
+};
+
+async function shareApi(method: string, path: string, body?: unknown) {
+  return fetch(`${baseUrl()}${path}`, {
+    method,
+    headers: { authorization: `Bearer ${apiKey()}`, "content-type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+async function shareCreate(body: ShareBody) {
+  if (body.access === "gated" && !body.secret) {
+    console.error("Gated share needs --secret <password>.");
+    process.exit(1);
+  }
+  const res = await shareApi("POST", "/api/v1/shares", body);
+  if (!res.ok) {
+    console.error(`Share failed: ${await errorMessage(res)}`);
+    process.exit(1);
+  }
+  const { share } = (await res.json()) as { share: { url: string } };
+  console.log(share.url);
+}
+
+async function shareLocal(port: number, rest: Omit<ShareBody, "originKind" | "port" | "machineId">) {
+  if (!port) {
+    console.error("Usage: mm share --local <port>");
+    process.exit(1);
+  }
+  if (rest.access === "gated" && !rest.secret) {
+    console.error("Gated share needs --secret <password>.");
+    process.exit(1);
+  }
+  const cf = spawn("cloudflared", ["tunnel", "--url", `http://localhost:${port}`], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  cf.on("error", () => {
+    console.error("cloudflared not found. Install: https://developers.cloudflare.com/cloudflared/");
+    process.exit(1);
+  });
+  const url = await new Promise<string>((resolve) => {
+    const scan = (buf: Buffer) => {
+      const m = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/.exec(buf.toString());
+      if (m) resolve(m[0]);
+    };
+    cf.stdout.on("data", scan);
+    cf.stderr.on("data", scan);
+    setTimeout(() => resolve(""), 30000);
+  });
+  if (!url) {
+    console.error("Timed out waiting for the cloudflared URL.");
+    cf.kill();
+    process.exit(1);
+  }
+  const res = await shareApi("POST", "/api/v1/shares", {
+    originKind: "local",
+    localUrl: url,
+    ...rest,
+  });
+  if (!res.ok) {
+    console.error(`Share failed: ${await errorMessage(res)}`);
+    cf.kill();
+    process.exit(1);
+  }
+  const { share } = (await res.json()) as { share: { url: string } };
+  console.log(`\nlocalhost:${port} → ${share.url}`);
+  console.log("Tunnel live. Ctrl-C to stop.\n");
+  process.on("SIGINT", () => {
+    cf.kill();
+    process.exit(0);
+  });
+  await new Promise<void>(() => {}); // hold until Ctrl-C
+}
+
+async function shareList() {
+  const res = await shareApi("GET", "/api/v1/shares");
+  if (!res.ok) {
+    console.error(await errorMessage(res));
+    process.exit(1);
+  }
+  const { shares } = (await res.json()) as {
+    shares: { slug: string; url: string; label: string; access: string; enabled: boolean }[];
+  };
+  if (!shares.length) {
+    console.log("No shares. Create one: mm share create --machine <id> --port <n>");
+    return;
+  }
+  for (const s of shares) {
+    console.log(`${s.enabled ? "on " : "off"}  ${s.url}  ${s.access}  ${s.label || ""}`);
+  }
+}
+
+async function shareRemove(slug?: string) {
+  if (!slug) {
+    console.error("Usage: mm share rm <slug>");
+    process.exit(1);
+  }
+  const res = await shareApi("DELETE", `/api/v1/shares/${encodeURIComponent(slug)}`);
+  if (!res.ok) {
+    console.error(await errorMessage(res));
+    process.exit(1);
+  }
+  console.log("Revoked.");
+}
+
 function whoami() {
   const resolved = resolveKey();
   if (!resolved) {
@@ -498,9 +663,64 @@ async function main() {
     whoami();
     return;
   }
+  if (cmd === "pager") {
+    const flag = (name: string) => {
+      const i = args.indexOf(name);
+      return i >= 0 ? args[i + 1] : undefined;
+    };
+    if (args[1] === "set") {
+      await pagerSet(flag("--email"), flag("--phone"));
+      return;
+    }
+    if (args[1] === "status") {
+      await pagerStatus();
+      return;
+    }
+    console.error(
+      "Usage: mm pager set --email you@example.com | mm pager status",
+    );
+    process.exit(1);
+  }
+  if (cmd === "share") {
+    const flag = (name: string) => {
+      const i = args.indexOf(name);
+      return i >= 0 ? args[i + 1] : undefined;
+    };
+    const has = (name: string) => args.includes(name);
+    const kind = has("--api") ? "api" : "website";
+    const access = has("--gated") ? "gated" : "public";
+    const secret = flag("--secret");
+    const label = flag("--label");
+    if (has("--local")) {
+      await shareLocal(Number(flag("--local")), { kind, access, secret, label });
+      return;
+    }
+    if (args[1] === "create") {
+      const machineId = flag("--machine");
+      const port = Number(flag("--port"));
+      if (!machineId || !port) {
+        console.error("share create needs --machine <id> --port <n>");
+        process.exit(1);
+      }
+      await shareCreate({ originKind: "machine", machineId, port, kind, access, secret, label });
+      return;
+    }
+    if (args[1] === "ls") {
+      await shareList();
+      return;
+    }
+    if (args[1] === "rm") {
+      await shareRemove(args[2]);
+      return;
+    }
+    console.error(
+      "Usage: mm share create --machine <id> --port <n> | --local <port> | ls | rm <slug>",
+    );
+    process.exit(1);
+  }
   // Distinguish an unknown command from a known one missing its args, so a
   // user on an older CLI learns to upgrade instead of re-reading usage.
-  const known = ["run", "agent", "login", "logout", "whoami"];
+  const known = ["run", "agent", "login", "logout", "whoami", "pager", "share"];
   if (cmd && !known.includes(cmd)) {
     console.error(
       `Unknown command "${cmd}". If a guide told you to run it, your CLI may ` +

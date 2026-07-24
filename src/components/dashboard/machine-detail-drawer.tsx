@@ -7,6 +7,7 @@ import {
   Copy,
   ExternalLink,
   Globe,
+  Lock,
   RotateCcw,
   Square,
   Terminal,
@@ -483,6 +484,209 @@ function RemotePanel({ machine }: { machine: Machine }) {
   );
 }
 
+type ShareItem = {
+  slug: string;
+  url: string;
+  machineId: string | null;
+  port: number | null;
+  kind: string;
+  access: string;
+  enabled: boolean;
+};
+
+function ShareLinkRow({
+  share,
+  onRevoke,
+  revoking,
+}: {
+  share: ShareItem;
+  onRevoke: () => void;
+  revoking: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(share.url);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <li className="flex items-center gap-1.5 rounded-md border border-border bg-card/60 px-2.5 py-1.5">
+      <button
+        type="button"
+        onClick={() => void copy()}
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        aria-label={copied ? "Link copied" : "Copy share link"}
+      >
+        <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/90">
+          {share.url}
+        </code>
+        {copied ? (
+          <Check className="size-3.5 shrink-0 text-signal" aria-hidden />
+        ) : (
+          <Copy className="size-3.5 shrink-0 opacity-50" aria-hidden />
+        )}
+      </button>
+      <span className="flex shrink-0 items-center gap-1 text-[10px] uppercase text-muted-foreground tabular-nums">
+        :{share.port}
+        {share.access === "gated" ? (
+          <Lock className="size-3" aria-label="password protected" />
+        ) : null}
+      </span>
+      <button
+        type="button"
+        onClick={onRevoke}
+        disabled={revoking}
+        className="shrink-0 text-destructive disabled:opacity-40"
+        aria-label="Revoke share"
+      >
+        <Trash2 className="size-3.5" aria-hidden />
+      </button>
+    </li>
+  );
+}
+
+function SharePanel({ machine }: { machine: Machine }) {
+  const running = machine.status === "running";
+  const [port, setPort] = useState("3000");
+  const [kind, setKind] = useState<"website" | "api">("website");
+  const [gated, setGated] = useState(false);
+  const [secret, setSecret] = useState("");
+
+  const utils = api.useUtils();
+  const list = api.shares.list.useQuery();
+  const create = api.shares.create.useMutation({
+    onSuccess: () => {
+      setSecret("");
+      void utils.shares.list.invalidate();
+    },
+  });
+  const revoke = api.shares.revoke.useMutation({
+    onSuccess: () => void utils.shares.list.invalidate(),
+  });
+
+  const mine = (list.data ?? []).filter(
+    (s) => s.machineId === machine.id && s.enabled,
+  );
+
+  const submit = () => {
+    const p = Number(port);
+    if (!running || !p || (gated && !secret.trim())) return;
+    create.mutate({
+      machineId: machine.id,
+      port: p,
+      kind,
+      access: gated ? "gated" : "public",
+      secret: gated ? secret.trim() : undefined,
+    });
+  };
+
+  return (
+    <div className="space-y-3 px-3 pb-1 pt-3">
+      {!running ? (
+        <p className="px-0.5 text-[11px] text-muted-foreground">
+          Start the machine to create share links.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-stretch gap-1.5">
+            <input
+              value={port}
+              onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))}
+              inputMode="numeric"
+              aria-label="Port"
+              placeholder="3000"
+              className="h-8 w-16 rounded-md border border-border bg-card/60 px-2.5 font-mono text-[12px] text-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <div
+              role="tablist"
+              aria-label="Share kind"
+              className="inline-flex h-8 items-center gap-0.5 rounded-md border border-border bg-card/60 p-0.5"
+            >
+              {(["website", "api"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="tab"
+                  aria-selected={kind === k}
+                  onClick={() => setKind(k)}
+                  className={cn(
+                    "h-7 rounded-[5px] px-2.5 text-[12px] capitalize transition-colors",
+                    kind === k
+                      ? "bg-white/[0.06] text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={submit}
+              disabled={create.isPending || (gated && !secret.trim())}
+              className="h-8 shrink-0 rounded-md px-3 text-[12px] font-medium"
+            >
+              {create.isPending ? "Creating…" : "Share"}
+            </Button>
+          </div>
+
+          <label className="flex items-center gap-2 px-0.5 text-[12px] text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={gated}
+              onChange={(e) => setGated(e.target.checked)}
+              className="size-3.5 accent-foreground"
+            />
+            Password-protect
+          </label>
+          {gated ? (
+            <input
+              value={secret}
+              onChange={(e) => setSecret(e.target.value)}
+              type="password"
+              placeholder="share password"
+              aria-label="Share password"
+              className="h-8 w-full rounded-md border border-border bg-card/60 px-2.5 text-[12px] text-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          ) : null}
+
+          {create.error ? (
+            <p className="text-[12px] text-destructive" role="alert">
+              {create.error.message}
+            </p>
+          ) : null}
+        </div>
+      )}
+
+      {mine.length > 0 ? (
+        <ul className="space-y-1">
+          {mine.map((s) => (
+            <ShareLinkRow
+              key={s.slug}
+              share={s}
+              onRevoke={() => revoke.mutate({ slug: s.slug })}
+              revoking={revoke.isPending}
+            />
+          ))}
+        </ul>
+      ) : (
+        <p className="px-0.5 text-[11px] text-muted-foreground">
+          No share links yet. Pick the port your app listens on and Share.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function MachineDetailDrawer({
   machine,
   open,
@@ -492,7 +696,7 @@ export function MachineDetailDrawer({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [tab, setTab] = useState<"overview" | "remote">("overview");
+  const [tab, setTab] = useState<"overview" | "remote" | "share">("overview");
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="mm-app mm-cursor-panel max-h-[90vh] border-border">
@@ -523,7 +727,7 @@ export function MachineDetailDrawer({
                 aria-label="Machine detail sections"
                 className="inline-flex h-8 items-center gap-0.5 rounded-md border border-border bg-card/60 p-0.5"
               >
-                {(["overview", "remote"] as const).map((id) => (
+                {(["overview", "remote", "share"] as const).map((id) => (
                   <button
                     key={id}
                     type="button"
@@ -552,8 +756,10 @@ export function MachineDetailDrawer({
                     onDeleted={() => onOpenChange(false)}
                   />
                 </>
-              ) : (
+              ) : tab === "remote" ? (
                 <RemotePanel machine={machine} />
+              ) : (
+                <SharePanel machine={machine} />
               )}
             </div>
 

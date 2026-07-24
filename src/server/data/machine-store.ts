@@ -2,16 +2,32 @@ import { randomBytes } from "node:crypto";
 
 import { and, desc, eq } from "drizzle-orm";
 
+import { env } from "~/env";
 import { db } from "~/server/db";
 import {
   execs as execsTable,
   machineFiles,
   machines as machinesTable,
+  mailbox as mailboxTable,
+  pagerEvents as pagerEventsTable,
 } from "~/server/db/schema";
 
+import { createAgentKey, revokeAgentKey } from "./api-keys";
 import type { Machine, MachineStatus } from "./machines";
 import { modalEnabled, provisionMachine, terminateMachine } from "./modal-driver";
 import { getTemplate, loadTemplates } from "./templates";
+
+/** Env the in-sandbox agent utilities (pager, exec) need to call back home. */
+function agentEnv(
+  machineId: string,
+  secret: string,
+): Record<string, string> {
+  return {
+    MINIMACHINE_API_KEY: secret,
+    MINIMACHINE_BASE_URL: env.APP_BASE_URL ?? "https://www.minimachin.es",
+    MM_MACHINE_ID: machineId,
+  };
+}
 
 type Row = typeof machinesTable.$inferSelect;
 
@@ -84,6 +100,7 @@ export async function createMachine(
   }
 
   const short = randomBytes(3).toString("hex");
+  const id = `vm_${short}`;
   const name = input.name?.trim() ?? `vm-${short.slice(0, 4)}`;
   const task = input.task?.trim() ?? template.summary;
   const agent =
@@ -99,18 +116,26 @@ export async function createMachine(
   let sandboxId: string | undefined;
   let emulatorUrl: string | undefined;
   let appUrl: string | undefined;
+  let ports: Record<string, string> | undefined;
   let status: MachineStatus = "running";
 
   if (modalEnabled()) {
     try {
+      // Scoped key so the in-sandbox agent (pager, exec) authenticates as the
+      // owner. Only minted when there is an owner to scope to.
+      const agent = input.ownerUserId
+        ? agentEnv(id, await createAgentKey(input.ownerUserId, id))
+        : undefined;
       const provisioned = await provisionMachine({
         cpu: template.resources.cpu,
         memoryGb: template.resources.memoryGb,
         dockerfile: template.dockerfile,
+        env: agent,
       });
       sandboxId = provisioned.sandboxId;
       emulatorUrl = provisioned.emulatorUrl ?? undefined;
       appUrl = provisioned.appUrl ?? undefined;
+      ports = provisioned.ports;
     } catch (err) {
       console.error("[minimachines] Modal provisioning failed", err);
       status = "error";
@@ -120,7 +145,7 @@ export async function createMachine(
   const [row] = await db
     .insert(machinesTable)
     .values({
-      id: `vm_${short}`,
+      id,
       name,
       title,
       agent,
@@ -135,6 +160,7 @@ export async function createMachine(
       dockerfile: template.dockerfile,
       emulatorUrl,
       appUrl,
+      ports,
       sandboxId,
       ownerUserId: input.ownerUserId,
     })
@@ -179,6 +205,13 @@ export async function stopMachine(
     }
   }
 
+  // The sandbox is gone; its scoped key must die with it.
+  if (row.ownerUserId) {
+    await revokeAgentKey(row.ownerUserId, row.id).catch((err) =>
+      console.error("[minimachines] revoke agent key failed", row.id, err),
+    );
+  }
+
   return toMachine(row);
 }
 
@@ -211,21 +244,30 @@ export async function restartMachine(
       console.error("[minimachines] restart: terminate failed", err);
     }
   }
+  if (row.ownerUserId) {
+    await revokeAgentKey(row.ownerUserId, row.id).catch(() => undefined);
+  }
 
   let sandboxId: string | null = null;
   let emulatorUrl: string | null = null;
   let appUrl: string | null = null;
+  let ports: Record<string, string> | null = null;
   let status: MachineStatus = "running";
   if (modalEnabled()) {
     try {
+      const agent = row.ownerUserId
+        ? agentEnv(row.id, await createAgentKey(row.ownerUserId, row.id))
+        : undefined;
       const p = await provisionMachine({
         cpu: row.cpu,
         memoryGb: row.memoryGb,
         dockerfile: row.dockerfile ?? undefined,
+        env: agent,
       });
       sandboxId = p.sandboxId;
       emulatorUrl = p.emulatorUrl ?? null;
       appUrl = p.appUrl ?? null;
+      ports = p.ports;
     } catch (err) {
       console.error("[minimachines] restart: provision failed", err);
       status = "error";
@@ -239,6 +281,7 @@ export async function restartMachine(
       sandboxId,
       emulatorUrl,
       appUrl,
+      ports,
       uptime: "0m",
       lastActive: "just now",
     })
@@ -266,10 +309,15 @@ export async function deleteMachine(
       console.error("[minimachines] delete: terminate failed", err);
     }
   }
+  if (row.ownerUserId) {
+    await revokeAgentKey(row.ownerUserId, row.id).catch(() => undefined);
+  }
 
-  // No FK cascade — clear session rows explicitly so file blobs don't leak.
+  // No FK cascade — clear session + pager rows explicitly so nothing leaks.
   await db.delete(machineFiles).where(eq(machineFiles.machineId, row.id));
   await db.delete(execsTable).where(eq(execsTable.machineId, row.id));
+  await db.delete(mailboxTable).where(eq(mailboxTable.machineId, row.id));
+  await db.delete(pagerEventsTable).where(eq(pagerEventsTable.machineId, row.id));
   await db.delete(machinesTable).where(eq(machinesTable.id, row.id));
   return true;
 }

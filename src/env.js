@@ -19,6 +19,14 @@ export const env = createEnv({
     // sandboxes. Unset (e.g. local dev) the app records machines only.
     MODAL_TOKEN_ID: z.string().optional(),
     MODAL_TOKEN_SECRET: z.string().optional(),
+    // Agent Pager (v1, email-first). Unset → pager notify is a no-op that logs.
+    RESEND_API_KEY: z.string().optional(),
+    PAGER_FROM_EMAIL: z.string().optional(),
+    // Public origin used for reply links and injected into sandboxes.
+    APP_BASE_URL: z.string().url().optional(),
+    // Web Push (VAPID). Unset → push is a no-op; email still works.
+    VAPID_PRIVATE_KEY: z.string().optional(),
+    VAPID_SUBJECT: z.string().optional(),
   },
 
   /**
@@ -28,6 +36,7 @@ export const env = createEnv({
    */
   client: {
     NEXT_PUBLIC_WORKOS_REDIRECT_URI: z.string().url(),
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY: z.string().optional(),
   },
 
   /**
@@ -39,6 +48,12 @@ export const env = createEnv({
     NODE_ENV: process.env.NODE_ENV,
     MODAL_TOKEN_ID: process.env.MODAL_TOKEN_ID,
     MODAL_TOKEN_SECRET: process.env.MODAL_TOKEN_SECRET,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    PAGER_FROM_EMAIL: process.env.PAGER_FROM_EMAIL,
+    APP_BASE_URL: process.env.APP_BASE_URL,
+    VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
+    VAPID_SUBJECT: process.env.VAPID_SUBJECT,
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
     WORKOS_API_KEY: process.env.WORKOS_API_KEY,
     WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID,
     WORKOS_COOKIE_PASSWORD: process.env.WORKOS_COOKIE_PASSWORD,

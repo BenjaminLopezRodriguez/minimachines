@@ -20,12 +20,16 @@ export type Provisioned = {
   sandboxId: string;
   emulatorUrl: string | null;
   appUrl: string | null;
+  /** Exposed port → public tunnel URL, for shareable links. */
+  ports: Record<string, string>;
 };
 
 const APP_NAME = "minimachine";
 const TTYD_PORT = 7681;
 /** Conventional app port exposed so a server built in the box is viewable. */
 const APP_PORT = 3000;
+/** Port range tunneled for shareable links (Modal needs them at create time). */
+const SHARE_PORTS = Array.from({ length: 10 }, (_, i) => 3000 + i);
 
 /**
  * Provisioning is off unless explicitly configured, so local dev and tests
@@ -74,6 +78,40 @@ const PLATFORM_COMMANDS = [
   `RUN curl -fsSL ${GOSU_URL} -o /usr/local/bin/gosu && chmod 755 /usr/local/bin/gosu`,
   "RUN (id agent >/dev/null 2>&1 || useradd -m -s /bin/bash agent || adduser -D -s /bin/bash agent) && mkdir -p /workspace && chown -R agent /workspace",
 ];
+
+/** Read a repo tool file → a base64 heredoc install RUN, or null if absent. */
+function embedFile(rel: string, dest: string, chmod = false): string | null {
+  try {
+    const b64 = Buffer.from(
+      readFileSync(join(process.cwd(), rel), "utf8"),
+      "utf8",
+    ).toString("base64");
+    const dir = dest.slice(0, dest.lastIndexOf("/"));
+    return (
+      `RUN mkdir -p ${JSON.stringify(dir)} && ` +
+      `printf '%s' ${JSON.stringify(b64)} | base64 -d > ${JSON.stringify(dest)}` +
+      (chmod ? ` && chmod 755 ${JSON.stringify(dest)}` : "")
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Auto-install the Agent Pager into every machine: the `mm-pager` CLI plus its
+ * Claude Code skill. Best-effort python3 so it runs on any base. Appended after
+ * the platform layer (which creates the `agent` user); a missing tools/ file
+ * just drops its line.
+ */
+const MM_PAGER_COMMANDS: string[] = [
+  "RUN (command -v python3 >/dev/null 2>&1) || (apt-get update && apt-get install -y --no-install-recommends python3) || (apk add --no-cache python3) || true",
+  embedFile("tools/mm-pager", "/usr/local/bin/mm-pager", true),
+  embedFile(
+    "tools/agent-pager-SKILL.md",
+    "/home/agent/.claude/skills/agent-pager/SKILL.md",
+  ),
+  "RUN chown -R agent /home/agent/.claude 2>/dev/null || true",
+].filter((c): c is string => Boolean(c));
 
 type ImagePlan = { base: string; commands: string[]; command: string[] };
 
@@ -129,7 +167,7 @@ function planFromDockerfile(dockerfile: string): ImagePlan | null {
       : "";
   return {
     base,
-    commands: [body.join("\n"), ...PLATFORM_COMMANDS],
+    commands: [body.join("\n"), ...PLATFORM_COMMANDS, ...MM_PAGER_COMMANDS],
     command: [
       "sh",
       "-c",
@@ -145,6 +183,8 @@ export async function provisionMachine(opts: {
   dockerfile?: string;
   /** Sandbox lifetime. Modal terminates the sandbox when this elapses. */
   timeoutMs?: number;
+  /** Env injected into the sandbox (e.g. the machine's scoped mm_ key). */
+  env?: Record<string, string>;
 }): Promise<Provisioned> {
   // Imported lazily so the SDK is not pulled into builds that never call it.
   const { ModalClient } = await import("modal");
@@ -160,10 +200,11 @@ export async function provisionMachine(opts: {
       client.images.fromRegistry(base).dockerfileCommands(commands),
       {
         command,
-        encryptedPorts: [TTYD_PORT, APP_PORT],
+        encryptedPorts: [TTYD_PORT, ...SHARE_PORTS],
         cpu: opts.cpu,
         memoryMiB,
         timeoutMs,
+        env: opts.env,
       },
     );
 
@@ -183,25 +224,30 @@ export async function provisionMachine(opts: {
           `falling back to the generic image (no template toolchain)`,
         err,
       );
-      sandbox = await mkSandbox("node:22-alpine", IMAGE_COMMANDS, TTYD_CMD);
+      sandbox = await mkSandbox("node:22-alpine", [...IMAGE_COMMANDS, ...MM_PAGER_COMMANDS], TTYD_CMD);
     }
   } else {
-    sandbox = await mkSandbox("node:22-alpine", IMAGE_COMMANDS, TTYD_CMD);
+    sandbox = await mkSandbox("node:22-alpine", [...IMAGE_COMMANDS, ...MM_PAGER_COMMANDS], TTYD_CMD);
   }
 
   // A sandbox is usable even if the tunnel lookup fails; surface it as a
   // machine without a console rather than failing the whole creation.
   let emulatorUrl: string | null = null;
   let appUrl: string | null = null;
+  const ports: Record<string, string> = {};
   try {
     const tunnels = await sandbox.tunnels();
     emulatorUrl = tunnels[TTYD_PORT]?.url ?? null;
-    appUrl = tunnels[APP_PORT]?.url ?? null;
+    for (const p of SHARE_PORTS) {
+      const url = tunnels[p]?.url;
+      if (url) ports[p] = url;
+    }
+    appUrl = ports[APP_PORT] ?? null;
   } catch {
-    /* leave both null */
+    /* leave null / empty */
   }
 
-  return { sandboxId: sandbox.sandboxId, emulatorUrl, appUrl };
+  return { sandboxId: sandbox.sandboxId, emulatorUrl, appUrl, ports };
 }
 
 export async function terminateMachine(sandboxId: string): Promise<void> {

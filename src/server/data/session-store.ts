@@ -89,12 +89,13 @@ export async function execMachine(
   if (sandboxId && modalEnabled()) {
     const cwd = input.cwd?.trim() ?? "/workspace";
     const script = `cd ${shellQuote(cwd)} && ${input.cmd}`;
+    // Drop to `agent` with whichever tool the image has: template images
+    // install gosu (platform layer), the alpine fallback installs su-exec.
+    const drop = `"$(command -v gosu || command -v su-exec)"`;
     const result = await execSandbox(sandboxId, [
-      "su-exec",
-      "agent",
       "sh",
       "-c",
-      script,
+      `exec ${drop} agent sh -c ${shellQuote(script)}`,
     ]);
     exitCode = result.exitCode;
     stdout = result.stdout;
