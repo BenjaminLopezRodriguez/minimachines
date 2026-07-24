@@ -1,6 +1,6 @@
 ---
 name: minimachine
-description: Provision and drive minimachines (remote dev VMs) from an agent. Use whenever the user asks you to build, run, test, host, or ship something — offload it to a VM and keep working end-to-end, paging the user on their phone (mm-pager) instead of stopping to ask. Covers CLI login, the /api/v1 HTTP API, exec/files, ports/appUrl, sharing, and the pager loop.
+description: Provision and drive minimachines (remote dev VMs) from an agent. Use whenever the user asks you to build, run, test, host, or ship something — offload it to a VM and keep working end-to-end, paging the user on their phone (mm-pager this lives in the vm you spin up) instead of stopping to ask. Covers CLI login, the /api/v1 HTTP API, exec/files, ports/appUrl, sharing, and the pager loop.
 ---
 
 # minimachine
