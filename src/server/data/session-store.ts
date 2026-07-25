@@ -29,6 +29,9 @@ export type ExecResult = {
   createdAt: string;
 };
 
+/** `execs.exitCode` while the command is still in flight. */
+export const EXEC_RUNNING = -1;
+
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
 
 export type Job = {
@@ -85,6 +88,20 @@ export async function execMachine(
   let stdout = `[minimachine stub] ran: ${input.cmd}\n`;
   let stderr = "";
 
+  // The row lands *before* the command runs so watchers (the baton page) can
+  // mirror what's running instead of only what finished. exitCode -1 = running.
+  const id = `exec_${randomBytes(4).toString("hex")}`;
+  await db.insert(execsTable).values({
+    id,
+    machineId,
+    cmd: input.cmd,
+    cwd: input.cwd,
+    exitCode: EXEC_RUNNING,
+    stdout: "",
+    stderr: "",
+    durationMs: 0,
+  });
+
   const sandboxId = await sandboxIdFor(machineId);
   if (sandboxId && modalEnabled()) {
     const cwd = input.cwd?.trim() ?? "/workspace";
@@ -92,28 +109,40 @@ export async function execMachine(
     // Drop to `agent` with whichever tool the image has: template images
     // install gosu (platform layer), the alpine fallback installs su-exec.
     const drop = `"$(command -v gosu || command -v su-exec)"`;
-    const result = await execSandbox(sandboxId, [
-      "sh",
-      "-c",
-      `exec ${drop} agent sh -c ${shellQuote(script)}`,
-    ]);
-    exitCode = result.exitCode;
-    stdout = result.stdout;
-    stderr = result.stderr;
+    try {
+      const result = await execSandbox(sandboxId, [
+        "sh",
+        "-c",
+        `exec ${drop} agent sh -c ${shellQuote(script)}`,
+      ]);
+      exitCode = result.exitCode;
+      stdout = result.stdout;
+      stderr = result.stderr;
+    } catch (err) {
+      // Close the row out rather than leaving it stuck on "running".
+      // ponytail: a killed server still orphans one row; a sweeper can age
+      // those out if it ever matters.
+      await db
+        .update(execsTable)
+        .set({
+          exitCode: 1,
+          stderr: err instanceof Error ? err.message : "exec failed",
+          durationMs: Math.max(1, Date.now() - started),
+        })
+        .where(eq(execsTable.id, id));
+      throw err;
+    }
   }
 
   const [row] = await db
-    .insert(execsTable)
-    .values({
-      id: `exec_${randomBytes(4).toString("hex")}`,
-      machineId,
-      cmd: input.cmd,
-      cwd: input.cwd,
+    .update(execsTable)
+    .set({
       exitCode,
       stdout,
       stderr,
       durationMs: Math.max(1, Date.now() - started),
     })
+    .where(eq(execsTable.id, id))
     .returning();
 
   if (!row) throw new Error("Failed to record exec");

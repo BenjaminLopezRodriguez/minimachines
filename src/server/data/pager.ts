@@ -1,9 +1,16 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, ne } from "drizzle-orm";
 
 import { db } from "~/server/db";
-import { mailbox, pagerContacts, pagerEvents } from "~/server/db/schema";
+import {
+  execs,
+  machines,
+  mailbox,
+  pagerContacts,
+  pagerEvents,
+  shares,
+} from "~/server/db/schema";
 
 const TOKEN_TTL_MS = 30 * 60 * 1000;
 
@@ -172,4 +179,119 @@ export async function pollMailbox(
     model: r.model ?? null,
     createdAt: r.createdAt,
   }));
+}
+
+export type BatonStatus = {
+  /** Everything the agent has paged about this machine since you were asked. */
+  events: { kind: string; text: string; at: string }[];
+  /** Commands the agent has run on the box since then — the live build log. */
+  commands: {
+    cmd: string;
+    running: boolean;
+    ok: boolean;
+    /** Last line of output, so a failure reads without opening a terminal. */
+    tail: string;
+    at: string;
+  }[];
+  /** Where to go look at the result, once there is one. */
+  liveUrl: string | null;
+  /** The agent has reported the work landed. */
+  done: boolean;
+};
+
+/** Last non-empty line of a command's output, trimmed for a phone screen. */
+function lastLine(stdout: string, stderr: string): string {
+  const lines = `${stdout}\n${stderr}`.split("\n").filter((l) => l.trim());
+  return (lines.at(-1) ?? "").trim().slice(0, 200);
+}
+
+const SHARE_DOMAIN = process.env.SHARE_BASE_DOMAIN ?? "minimachin.es";
+
+/**
+ * Read the machine's baton feed using a reply token that has already been
+ * consumed. `resolveReplyToken` deliberately refuses a used token so a reply
+ * cannot be submitted twice; watching what the agent did next is a different,
+ * read-only capability, so it only needs the token to be unexpired.
+ */
+export async function batonStatus(token: string): Promise<BatonStatus | null> {
+  const [origin] = await db
+    .select()
+    .from(pagerEvents)
+    .where(eq(pagerEvents.tokenHash, hashToken(token)))
+    .limit(1);
+  if (!origin || origin.expiresAt.getTime() < Date.now()) return null;
+
+  // Anchor on the reply itself when there is one: what matters is what the
+  // agent did *with the answer*, not the question you already read.
+  const since = origin.consumedAt ?? origin.createdAt;
+  const rows = await db
+    .select({
+      kind: pagerEvents.kind,
+      text: pagerEvents.text,
+      createdAt: pagerEvents.createdAt,
+    })
+    .from(pagerEvents)
+    .where(
+      and(
+        eq(pagerEvents.machineId, origin.machineId),
+        gte(pagerEvents.createdAt, since),
+        // Timestamps are millisecond-granular, so a fast reply can tie with the
+        // question's own createdAt — exclude it by id, not by clock.
+        ne(pagerEvents.id, origin.id),
+      ),
+    )
+    .orderBy(asc(pagerEvents.createdAt))
+    .limit(20);
+
+  // Newest-first + limit, then flipped: the tail of a long build is the part
+  // worth watching.
+  const cmdRows = await db
+    .select({
+      cmd: execs.cmd,
+      exitCode: execs.exitCode,
+      stdout: execs.stdout,
+      stderr: execs.stderr,
+      createdAt: execs.createdAt,
+    })
+    .from(execs)
+    .where(
+      and(eq(execs.machineId, origin.machineId), gte(execs.createdAt, since)),
+    )
+    .orderBy(desc(execs.createdAt))
+    .limit(12);
+
+  const [share] = await db
+    .select({ slug: shares.slug })
+    .from(shares)
+    .where(and(eq(shares.machineId, origin.machineId), eq(shares.enabled, true)))
+    .orderBy(desc(shares.createdAt))
+    .limit(1);
+  const [machine] = await db
+    .select({ appUrl: machines.appUrl })
+    .from(machines)
+    .where(eq(machines.id, origin.machineId))
+    .limit(1);
+
+  const events = rows.map((r) => ({
+    kind: r.kind,
+    text: r.text,
+    at: r.createdAt.toISOString(),
+  }));
+  return {
+    events,
+    commands: cmdRows.reverse().map((r) => ({
+      cmd: r.cmd,
+      // ponytail: negative exitCode is the in-flight sentinel (EXEC_RUNNING).
+      running: r.exitCode < 0,
+      ok: r.exitCode === 0,
+      tail: lastLine(r.stdout, r.stderr),
+      at: r.createdAt.toISOString(),
+    })),
+    // A branded share link is the one the owner chose to hand out; fall back
+    // to the machine's own public port.
+    liveUrl: share
+      ? `https://${share.slug}.${SHARE_DOMAIN}`
+      : (machine?.appUrl ?? null),
+    done: events.some((e) => e.kind === "finished" || e.kind === "succeeded"),
+  };
 }

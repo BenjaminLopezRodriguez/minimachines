@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 
 import { resolveReplyToken, submitReply } from "~/server/data/pager";
 
+import { StatusFeed } from "./status-feed";
+
 type Props = {
   params: Promise<{ token: string }>;
   searchParams: Promise<{ sent?: string }>;
@@ -21,8 +23,11 @@ export default async function ReplyPage({ params, searchParams }: Props) {
   if (sent === "1") {
     return (
       <main style={wrap}>
-        <h2>Sent ✓</h2>
-        <p>Your agent has your reply. You can close this.</p>
+        <h2 style={{ marginBottom: 4 }}>Sent ✓</h2>
+        <p style={{ margin: "0 0 16px", opacity: 0.6 }}>
+          Your agent has your reply — here&apos;s what it&apos;s doing.
+        </p>
+        <StatusFeed token={token} />
       </main>
     );
   }
