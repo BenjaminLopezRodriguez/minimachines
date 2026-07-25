@@ -48,6 +48,7 @@ type DeviceTokenResponse = {
 
 function usage(): never {
   console.error(`Usage:
+  minimachines skill install [--agent claude|codex|cursor] [--dir <path>] [--print]
   minimachines create <templateId> [--json]
   minimachines exec <machineId> <command...> [--cwd <dir>]
   minimachines put <machineId> <localFile> <remotePath>
@@ -457,6 +458,44 @@ async function logout() {
   console.log("Logged out.");
 }
 
+// --- skill install ----------------------------------------------------------
+
+/**
+ * The skill doc ships inside the package rather than being fetched, so the
+ * instructions an agent reads always match the commands this CLI actually has.
+ */
+function skillSource() {
+  return readFileSync(new URL("../skill/SKILL.md", import.meta.url), "utf8");
+}
+
+/** Where each known agent looks for skills. `--dir` covers everything else. */
+const SKILL_TARGETS: Record<string, string> = {
+  claude: join(homedir(), ".claude", "skills", "minimachine", "SKILL.md"),
+  codex: join(homedir(), ".codex", "skills", "minimachine", "SKILL.md"),
+  cursor: join(homedir(), ".cursor", "rules", "minimachine.md"),
+};
+
+function skillInstall(opts: { agent?: string; dir?: string; print?: boolean }) {
+  const doc = skillSource();
+  if (opts.print) {
+    process.stdout.write(doc);
+    return;
+  }
+  const target = opts.dir
+    ? join(opts.dir, "SKILL.md")
+    : SKILL_TARGETS[opts.agent ?? "claude"];
+  if (!target) {
+    console.error(
+      `Unknown agent "${opts.agent}". Known: ${Object.keys(SKILL_TARGETS).join(", ")} — or use --dir <path> / --print.`,
+    );
+    process.exit(1);
+  }
+  mkdirSync(join(target, ".."), { recursive: true });
+  writeFileSync(target, doc);
+  console.log(`Installed minimachine skill -> ${target}`);
+  console.log("Restart your agent session to pick it up.");
+}
+
 // --- machine commands -------------------------------------------------------
 
 /** Every machine call goes through here: one auth/error path, no duplication. */
@@ -510,9 +549,12 @@ async function machineExec(id: string, cmd: string, cwd?: string) {
 
 async function machinePut(id: string, localPath: string, remotePath: string) {
   const bytes = new Uint8Array(readFileSync(localPath));
-  const clean = remotePath.replace(/^\/+/, "");
+  // The API roots every file under /workspace, so `/workspace/app/x`,
+  // `workspace/app/x` and `app/x` must all mean the same place — otherwise the
+  // obvious spelling silently lands in /workspace/workspace/app/x.
+  const clean = remotePath.replace(/^\/+/, "").replace(/^workspace\/+/, "");
   await api("PUT", mpath(id, `/files/${clean.split("/").map(encodeURIComponent).join("/")}`), bytes);
-  console.log(`${localPath} -> ${remotePath} (${bytes.length}b)`);
+  console.log(`${localPath} -> /workspace/${clean} (${bytes.length}b)`);
 }
 
 async function machineNotify(id: string, kind: string, text: string) {
@@ -737,11 +779,24 @@ async function main() {
         out.push(a);
         continue;
       }
-      if (a === "--cwd" || a === "--timeout") i++; // skip its value
+      // Flags that take a value: skip the value so it never lands in a command.
+      if (["--cwd", "--timeout", "--agent", "--dir"].includes(a)) i++;
     }
     return out;
   })();
 
+  if (cmd === "skill") {
+    if (args[1] && args[1] !== "install" && !args[1].startsWith("--")) {
+      console.error("Usage: mm skill install [--agent claude|codex|cursor] [--dir <path>] [--print]");
+      process.exit(1);
+    }
+    skillInstall({
+      agent: flagOf("--agent"),
+      dir: flagOf("--dir"),
+      print: args.includes("--print"),
+    });
+    return;
+  }
   if (cmd === "create" && positional[1]) {
     await machineCreate(positional[1], args.includes("--json"));
     return;
@@ -870,7 +925,7 @@ async function main() {
   // user on an older CLI learns to upgrade instead of re-reading usage.
   const known = [
     "run", "agent", "login", "logout", "whoami", "pager", "share",
-    "create", "exec", "put", "ask", "say", "stop",
+    "create", "exec", "put", "ask", "say", "stop", "skill",
   ];
   if (cmd && !known.includes(cmd)) {
     console.error(
