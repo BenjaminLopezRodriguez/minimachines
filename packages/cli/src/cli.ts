@@ -48,6 +48,12 @@ type DeviceTokenResponse = {
 
 function usage(): never {
   console.error(`Usage:
+  minimachines create <templateId> [--json]
+  minimachines exec <machineId> <command...> [--cwd <dir>]
+  minimachines put <machineId> <localFile> <remotePath>
+  minimachines ask <machineId> <question> [--timeout <sec>]
+  minimachines say <machineId> finished|succeeded <text>
+  minimachines stop <machineId>
   minimachines run <machineId> [--keep-awake] [--lid-closed]
   minimachines login [--no-open] [--paste]
   minimachines logout
@@ -451,6 +457,94 @@ async function logout() {
   console.log("Logged out.");
 }
 
+// --- machine commands -------------------------------------------------------
+
+/** Every machine call goes through here: one auth/error path, no duplication. */
+async function api(method: string, path: string, body?: unknown) {
+  const res = await fetch(`${baseUrl()}${path}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${apiKey()}`,
+      ...(body === undefined || body instanceof Uint8Array
+        ? {}
+        : { "content-type": "application/json" }),
+    },
+    body:
+      body === undefined
+        ? undefined
+        : body instanceof Uint8Array
+          ? (body as unknown as BodyInit) // raw bytes: file upload
+          : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    console.error(await errorMessage(res));
+    process.exit(1);
+  }
+  return res;
+}
+
+const mpath = (id: string, tail = "") =>
+  `/api/v1/machines/${encodeURIComponent(id)}${tail}`;
+
+async function machineCreate(templateId: string, json: boolean) {
+  const res = await api("POST", "/api/v1/machines", { templateId });
+  const { machine } = (await res.json()) as { machine: Machine & { appUrl?: string } };
+  if (json) {
+    console.log(JSON.stringify(machine, null, 2));
+    return;
+  }
+  console.log(machine.id);
+  if (machine.appUrl) console.log(machine.appUrl);
+}
+
+async function machineExec(id: string, cmd: string, cwd?: string) {
+  const res = await api("POST", mpath(id, "/exec"), { cmd, cwd });
+  const { exec } = (await res.json()) as {
+    exec: { stdout: string; stderr: string; exitCode: number };
+  };
+  if (exec.stdout) process.stdout.write(exec.stdout);
+  if (exec.stderr) process.stderr.write(exec.stderr);
+  // Mirror the remote exit code so `&&` chains and CI behave locally.
+  process.exit(exec.exitCode);
+}
+
+async function machinePut(id: string, localPath: string, remotePath: string) {
+  const bytes = new Uint8Array(readFileSync(localPath));
+  const clean = remotePath.replace(/^\/+/, "");
+  await api("PUT", mpath(id, `/files/${clean.split("/").map(encodeURIComponent).join("/")}`), bytes);
+  console.log(`${localPath} -> ${remotePath} (${bytes.length}b)`);
+}
+
+async function machineNotify(id: string, kind: string, text: string) {
+  await api("POST", mpath(id, "/notify"), { kind, text });
+}
+
+/**
+ * Ask the user and block on their phone reply — this is the approval path.
+ * Agents call this instead of stopping in a terminal the user isn't watching.
+ */
+async function machineAsk(id: string, text: string, timeoutSec: number) {
+  await machineNotify(id, "question", text);
+  const deadline = Date.now() + timeoutSec * 1000;
+  while (Date.now() < deadline) {
+    const res = await api("GET", mpath(id, "/mailbox"));
+    const { replies } = (await res.json()) as { replies: { text?: string }[] };
+    const reply = replies.find((r) => r.text);
+    if (reply?.text) {
+      console.log(reply.text);
+      return;
+    }
+    await sleep(3000);
+  }
+  console.error(`No reply within ${timeoutSec}s.`);
+  process.exit(2);
+}
+
+async function machineStop(id: string) {
+  await api("POST", mpath(id, "/stop"));
+  console.log(`${id} stopped.`);
+}
+
 // --- pager commands ---------------------------------------------------------
 
 async function pagerSet(email?: string, phone?: string) {
@@ -628,6 +722,60 @@ async function main() {
 
   const keepAwake = args.includes("--keep-awake");
   const lidClosed = args.includes("--lid-closed"); // implies keep-awake
+
+  // Flag value + the positional args with all flags stripped, so a command
+  // string can contain anything without being eaten by the flag parser.
+  const flagOf = (name: string) => {
+    const i = args.indexOf(name);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const positional = (() => {
+    const out: string[] = [];
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i]!;
+      if (!a.startsWith("--")) {
+        out.push(a);
+        continue;
+      }
+      if (a === "--cwd" || a === "--timeout") i++; // skip its value
+    }
+    return out;
+  })();
+
+  if (cmd === "create" && positional[1]) {
+    await machineCreate(positional[1], args.includes("--json"));
+    return;
+  }
+  if (cmd === "exec" && positional[1] && positional[2]) {
+    // Join the rest so `mm exec id npm run build` works unquoted too.
+    await machineExec(positional[1], positional.slice(2).join(" "), flagOf("--cwd"));
+    return;
+  }
+  if (cmd === "put" && positional[3]) {
+    await machinePut(positional[1]!, positional[2]!, positional[3]);
+    return;
+  }
+  if (cmd === "ask" && positional[2]) {
+    await machineAsk(
+      positional[1]!,
+      positional.slice(2).join(" "),
+      Number(flagOf("--timeout") ?? 300),
+    );
+    return;
+  }
+  if (cmd === "say" && positional[3]) {
+    const kind = positional[2]!;
+    if (kind !== "finished" && kind !== "succeeded") {
+      console.error("say kind must be finished|succeeded (use `ask` for questions)");
+      process.exit(1);
+    }
+    await machineNotify(positional[1]!, kind, positional.slice(3).join(" "));
+    return;
+  }
+  if (cmd === "stop" && positional[1]) {
+    await machineStop(positional[1]);
+    return;
+  }
   if (cmd === "run" && args[1] && !args[1].startsWith("-")) {
     await run(args[1], { keepAwake, lidClosed });
     return;
@@ -720,7 +868,10 @@ async function main() {
   }
   // Distinguish an unknown command from a known one missing its args, so a
   // user on an older CLI learns to upgrade instead of re-reading usage.
-  const known = ["run", "agent", "login", "logout", "whoami", "pager", "share"];
+  const known = [
+    "run", "agent", "login", "logout", "whoami", "pager", "share",
+    "create", "exec", "put", "ask", "say", "stop",
+  ];
   if (cmd && !known.includes(cmd)) {
     console.error(
       `Unknown command "${cmd}". If a guide told you to run it, your CLI may ` +
