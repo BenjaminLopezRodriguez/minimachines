@@ -1,70 +1,81 @@
-import { DiffuseTypeText } from "~/components/ui/diffuse-type-text";
-import { WaitlistForm } from "~/components/waitlist/waitlist-form";
-
-import { VmPreview } from "./vm-preview";
+import {
+  ArrowRight,
+  ArrowDown,
+  Terminal,
+  Folder,
+  FileCode2,
+} from "lucide-react";
+import Link from "next/link";
+import { CommandBlock } from "./command-block";
+import { installers } from "~/lib/onboarding";
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden pt-12">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_70%_-5%,rgb(91_124_153/0.14),transparent_55%)] dark:bg-[radial-gradient(ellipse_80%_50%_at_70%_-5%,rgb(129_161_193/0.12),transparent_55%)]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.4] [background-image:linear-gradient(to_right,rgb(20_20_20/0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgb(20_20_20/0.04)_1px,transparent_1px)] dark:opacity-[0.35] dark:[background-image:linear-gradient(to_right,rgb(255_255_255/0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgb(255_255_255/0.035)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black_35%,transparent_92%)]"
-      />
-
-      <div className="relative mx-auto grid max-w-6xl gap-10 px-5 pb-16 pt-16 sm:px-8 lg:grid-cols-2 lg:items-center lg:gap-14 lg:pb-20 lg:pt-20">
-        <div>
-          <DiffuseTypeText
-            as="p"
-            startOnMount
-            delay={280}
-            speed={48}
-            wave={4}
-            variance={0.3}
-            className="font-sans text-[2.75rem] leading-[0.95] font-medium tracking-[-0.04em] text-foreground sm:text-6xl lg:text-[4.25rem]"
-          >
-            minimachines
-          </DiffuseTypeText>
-
-          <DiffuseTypeText
-            as="h1"
-            startOnMount
-            delay={900}
-            speed={26}
-            wave={3}
-            className="mt-5 max-w-md text-xl leading-snug tracking-tight text-foreground/90 sm:text-2xl"
-          >
-            Dedicated VMs for the agents you love.
-          </DiffuseTypeText>
-
-          <DiffuseTypeText
-            as="p"
-            startOnMount
-            delay={1800}
-            speed={16}
-            wave={4}
-            variance={0.4}
-            className="mt-4 max-w-md text-base leading-relaxed text-muted-foreground"
-          >
-            Run the heavy compute of agentic software development in the cloud —
-            Claude, Codex, Grok, Cursor, and more, each on their own machine.
-          </DiffuseTypeText>
-
-          <div
-            id="waitlist"
-            className="mm-fade-up mm-delay-3 mt-8 scroll-mt-28"
-          >
-            <WaitlistForm />
-          </div>
+    <section className="mm-container mm-hero" aria-labelledby="hero-title">
+      <div className="mm-hero-copy">
+        <p className="mm-intro">
+          <span aria-hidden="true" />
+          Cloud workspaces for coding agents
+        </p>
+        <h1 id="hero-title">
+          Small machine.
+          <br />
+          <span>Big headroom.</span>
+        </h1>
+        <p className="mm-lead">
+          Give your agent a workspace of its own. Run builds, tests, and long
+          jobs in the cloud. Keep your laptop for everything else.
+        </p>
+        <div className="mm-actions">
+          <Link className="mm-gloss mm-gloss-primary" href="/install">
+            Get started <ArrowRight size={17} aria-hidden="true" />
+          </Link>
+          <Link className="mm-gloss mm-gloss-secondary" href="/docs">
+            Read the docs
+          </Link>
         </div>
-
-        <div className="mm-fade-up mm-delay-2 min-w-0 lg:justify-self-stretch">
-          <VmPreview />
+        <p className="mm-prerequisite">
+          Node.js 20+ · macOS, Linux, or Windows
+        </p>
+      </div>
+      <div className="mm-workbench">
+        <div className="mm-workbench-chrome">
+          <span>
+            <Terminal size={15} aria-hidden="true" /> Your terminal
+          </span>
+          <span>CLI setup</span>
+        </div>
+        <div className="mm-workbench-body">
+          <p className="mm-terminal-heading">A little more room to build.</p>
+          <p className="mm-terminal-description">
+            Start with the CLI. Your agent comes with you.
+          </p>
+          <CommandBlock command={installers.npm} label="CLI install command" />
+          <div className="mm-terminal-next">
+            <span>Then connect</span>
+            <code>mm login</code>
+            <code>mm skill install --agent codex</code>
+          </div>
+          <Link href="/install">
+            Walk through setup <ArrowRight size={15} aria-hidden="true" />
+          </Link>
+        </div>
+        <div className="mm-workspace-strip">
+          <Folder size={16} aria-hidden="true" />
+          <span>/workspace</span>
+          <span>
+            <FileCode2 size={14} aria-hidden="true" /> Your files. Your tools.
+          </span>
         </div>
       </div>
+      <a href="#how-it-works" className="mm-hero-bottom">
+        <span>
+          You bring the agent.
+          <br />
+          <strong>We give it somewhere to work.</strong>
+        </span>
+        <ArrowDown size={22} aria-hidden="true" />
+      </a>
     </section>
   );
 }

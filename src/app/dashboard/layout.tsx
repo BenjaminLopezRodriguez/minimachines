@@ -1,3 +1,4 @@
+import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { DashboardShell } from "~/components/dashboard/shell";
 
 export default function DashboardLayout({
@@ -5,5 +6,9 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <DashboardShell>{children}</DashboardShell>;
+  return (
+    <AuthKitProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </AuthKitProvider>
+  );
 }

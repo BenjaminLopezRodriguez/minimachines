@@ -1,14 +1,19 @@
+import Link from "next/link";
+
 export function SiteFooter() {
   return (
-    <footer className="border-t border-border">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-5 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-        <p className="font-mono text-xs text-muted-foreground">
-          © {new Date().getFullYear()} minimachines
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Dedicated VMs for agentic software development.
-        </p>
+    <footer className="mm-site-footer mm-container">
+      <div>
+        <Link href="/" className="mm-wordmark">
+          minimachines
+        </Link>
+        <p>More room for the work.</p>
       </div>
+      <nav aria-label="Footer navigation">
+        <Link href="/install">Install CLI</Link>
+        <Link href="/docs">Documentation</Link>
+        <a href="/sign-in">Sign in</a>
+      </nav>
     </footer>
   );
 }

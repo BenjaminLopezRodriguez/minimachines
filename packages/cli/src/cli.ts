@@ -46,8 +46,9 @@ type DeviceTokenResponse = {
   base_url: string;
 };
 
-function usage(): never {
-  console.error(`Usage:
+function usage(exitCode = 1): never {
+  const print = exitCode === 0 ? console.log : console.error;
+  print(`Usage:
   minimachines skill install [--agent claude|codex|cursor] [--dir <path>] [--print]
   minimachines create <templateId> [--json]
   minimachines exec <machineId> <command...> [--cwd <dir>]
@@ -59,6 +60,8 @@ function usage(): never {
   minimachines login [--no-open] [--paste]
   minimachines logout
   minimachines whoami
+  minimachines --help
+  minimachines --version
   minimachines pager set --email you@example.com | --phone +15551234567
   minimachines pager status
   minimachines share create --machine <id> --port <n> [--api|--web] [--public|--gated] [--secret <s>]
@@ -72,10 +75,10 @@ Run flags (macOS):
                  restores your settings on exit)
 
 Env:
-  MINIMACHINE_API_KEY   overrides logged-in key (create at https://minimachin.es/dashboard/settings)
+  MINIMACHINE_API_KEY   overrides logged-in key (create at https://www.minimachin.es/dashboard/settings)
   MINIMACHINE_BASE_URL  optional (default https://www.minimachin.es)
 `);
-  process.exit(1);
+  process.exit(exitCode);
 }
 
 // --- credentials file layer -------------------------------------------------
@@ -761,6 +764,16 @@ function whoami() {
 async function main() {
   const args = process.argv.slice(2);
   const cmd = args[0];
+
+  // First-run discovery must work before login, including in non-interactive shells.
+  if (!cmd || cmd === "--help" || cmd === "-h" || cmd === "help") usage(0);
+  if (cmd === "--version" || cmd === "-v") {
+    const pkg = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    ) as { version: string };
+    console.log(pkg.version);
+    return;
+  }
 
   const keepAwake = args.includes("--keep-awake");
   const lidClosed = args.includes("--lid-closed"); // implies keep-awake

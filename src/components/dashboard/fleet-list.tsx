@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 import { MachineDetailDrawer } from "~/components/dashboard/machine-detail-drawer";
 import { cn } from "~/lib/utils";
-import {
-  type Machine,
-  type MachineStatus,
-} from "~/server/data/machines";
+import { type Machine, type MachineStatus } from "~/server/data/machines";
 
 const statusDot: Record<MachineStatus, string> = {
   running: "bg-signal",
@@ -38,14 +36,20 @@ export function FleetList({ machines }: { machines: Machine[] }) {
   if (machines.length === 0) {
     return (
       <div className="px-0.5 py-10 text-center">
-        <p className="text-sm font-medium text-foreground">No machines yet</p>
-        <p className="mx-auto mt-1.5 max-w-sm text-[13px] text-muted-foreground">
+        <p className="text-foreground text-sm font-medium">No machines yet</p>
+        <p className="text-muted-foreground mx-auto mt-1.5 max-w-sm text-[13px]">
           Spin up a dedicated VM for your next agent session. Press{" "}
-          <kbd className="rounded border border-border px-1 font-mono text-[11px]">
+          <kbd className="border-border rounded border px-1 font-mono text-[11px]">
             ⌘K
           </kbd>{" "}
           or use New machine.
         </p>
+        <Link
+          href="/install"
+          className="text-signal mt-4 inline-flex min-h-11 items-center rounded-md px-3 text-sm underline underline-offset-4 focus-visible:outline-2"
+        >
+          Set up the CLI and your agent
+        </Link>
       </div>
     );
   }
@@ -72,17 +76,17 @@ export function FleetList({ machines }: { machines: Machine[] }) {
                 aria-hidden
               />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium leading-snug text-foreground">
+                <span className="text-foreground block truncate text-[13px] leading-snug font-medium">
                   {m.title}
                 </span>
-                <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
+                <span className="text-muted-foreground mt-0.5 block truncate text-[12px]">
                   {m.name} · {statusLabel[m.status]}
                   {m.status === "running" || m.status === "starting"
                     ? ` · ${m.uptime}`
                     : null}
                 </span>
               </span>
-              <span className="shrink-0 pt-0.5 font-mono text-[11px] text-muted-foreground/80">
+              <span className="text-muted-foreground/80 shrink-0 pt-0.5 font-mono text-[11px]">
                 {m.region}
               </span>
             </button>

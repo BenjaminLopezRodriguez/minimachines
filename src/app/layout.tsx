@@ -1,6 +1,6 @@
 import "~/styles/globals.css";
+import "~/styles/site.css";
 
-import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { type Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     template: "%s · minimachines",
   },
   description:
-    "Run the heavy compute of agentic software development in the cloud. Claude, Codex, Grok, Cursor, and more — each in a dedicated VM.",
+    "Cloud workspaces for coding agents. Install the Mini Machines CLI, connect your agent, and run builds, tests, and long jobs off your laptop.",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "minimachines" },
@@ -46,9 +46,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="font-sans">
-        <AuthKitProvider>
-          <TRPCReactProvider>{children}</TRPCReactProvider>
-        </AuthKitProvider>
+        <TRPCReactProvider>{children}</TRPCReactProvider>
       </body>
     </html>
   );
