@@ -1,108 +1,323 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  ChevronRight,
+  Globe,
+  RefreshCw,
+  Search,
+  Server,
+  Terminal,
+  X,
+} from "lucide-react";
 import Link from "next/link";
-
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+import type { ReactNode } from "react";
 import { MachineDetailDrawer } from "~/components/dashboard/machine-detail-drawer";
-import { cn } from "~/lib/utils";
-import { type Machine, type MachineStatus } from "~/server/data/machines";
-
-const statusDot: Record<MachineStatus, string> = {
-  running: "bg-signal",
-  starting: "bg-foreground/50 animate-pulse",
-  stopped: "bg-muted-foreground/40",
-  error: "bg-destructive",
-};
+import {
+  filterMachines,
+  type FleetFilter,
+  type FleetSort,
+} from "~/lib/dashboard-machines";
+import type { Machine, MachineStatus } from "~/server/data/machines";
 
 const statusLabel: Record<MachineStatus, string> = {
   running: "Running",
   starting: "Starting",
   stopped: "Stopped",
-  error: "Error",
+  error: "Needs attention",
 };
+const filters: { value: FleetFilter; label: string }[] = [
+  { value: "all", label: "All machines" },
+  { value: "running", label: "Running" },
+  { value: "starting", label: "Starting" },
+  { value: "stopped", label: "Stopped" },
+  { value: "error", label: "Needs attention" },
+];
 
-/** Main-canvas fleet list — unbound; opens machine detail drawer. */
-export function FleetList({ machines }: { machines: Machine[] }) {
-  const [selected, setSelected] = useState<Machine | null>(null);
-  const open = selected !== null;
+export function MachineList({
+  machines,
+  onSelectMachine,
+  refreshAction,
+}: {
+  machines: Machine[];
+  onSelectMachine: (id: string) => void;
+  refreshAction?: ReactNode;
+}) {
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<FleetFilter>("all");
+  const [sort, setSort] = useState<FleetSort>("active");
+  const visible = filterMachines(machines, query, status, sort);
+  const active = machines.filter(
+    (m) => m.status === "running" || m.status === "starting",
+  ).length;
+  const errors = machines.filter((m) => m.status === "error").length;
+  const clear = () => {
+    setQuery("");
+    setStatus("all");
+  };
 
-  useEffect(() => {
-    const id = window.location.hash.replace(/^#/, "");
-    if (!id || id === "new") return;
-    const match = machines.find((m) => m.id === id);
-    if (match) setSelected(match);
-  }, [machines]);
-
-  if (machines.length === 0) {
+  if (machines.length === 0)
     return (
-      <div className="px-0.5 py-10 text-center">
-        <p className="text-foreground text-sm font-medium">No machines yet</p>
-        <p className="text-muted-foreground mx-auto mt-1.5 max-w-sm text-[13px]">
-          Spin up a dedicated VM for your next agent session. Press{" "}
-          <kbd className="border-border rounded border px-1 font-mono text-[11px]">
-            ⌘K
-          </kbd>{" "}
-          or use New machine.
+      <section className="mm-fleet-empty">
+        <div className="mm-empty-machine" aria-hidden="true">
+          <Server size={30} strokeWidth={1.3} />
+          <span />
+        </div>
+        <h2>Your first machine starts here.</h2>
+        <p>
+          Choose a runtime, give it a name, and get a cloud workspace for the
+          task ahead.
         </p>
         <Link
-          href="/install"
-          className="text-signal mt-4 inline-flex min-h-11 items-center rounded-md px-3 text-sm underline underline-offset-4 focus-visible:outline-2"
+          href="#new"
+          className="mm-dashboard-button mm-dashboard-button-primary"
         >
-          Set up the CLI and your agent
+          Create your first machine <ArrowRight size={16} aria-hidden="true" />
         </Link>
-      </div>
+        <Link href="/install" className="mm-dashboard-text-link">
+          Prefer your terminal? Set up the CLI
+        </Link>
+        <p className="mm-empty-footnote">
+          Machines are temporary. Export your work before stopping them.
+        </p>
+      </section>
     );
-  }
 
   return (
-    <>
-      <ul className="space-y-0.5">
-        {machines.map((m) => (
-          <li key={m.id} id={m.id}>
+    <section className="mm-fleet" aria-label="Your machines">
+      <div className="mm-fleet-summary">
+        <p>
+          <strong>{machines.length}</strong>{" "}
+          {machines.length === 1 ? "machine" : "machines"}
+          <span aria-hidden="true">·</span>
+          <strong>{active}</strong> active
+          {errors ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="mm-attention-count">
+                {errors} {errors === 1 ? "needs" : "need"} attention
+              </span>
+            </>
+          ) : null}
+        </p>
+        {refreshAction}
+      </div>
+      <div className="mm-fleet-toolbar">
+        <div className="mm-machine-search">
+          <Search size={17} aria-hidden="true" />
+          <label className="sr-only" htmlFor="machine-search">
+            Search machines
+          </label>
+          <input
+            id="machine-search"
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by name, task, or agent…"
+            autoComplete="off"
+          />
+          {query ? (
             <button
               type="button"
-              title={m.title}
-              onClick={() => {
-                setSelected(m);
-                window.history.replaceState(null, "", `#${m.id}`);
-              }}
-              className="group flex w-full items-start gap-3 rounded-md px-1.5 py-2.5 text-left transition-colors hover:bg-white/[0.03]"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
             >
-              <span
-                className={cn(
-                  "mt-1.5 size-1.5 shrink-0 rounded-full",
-                  statusDot[m.status],
-                )}
-                aria-hidden
-              />
-              <span className="min-w-0 flex-1">
-                <span className="text-foreground block truncate text-[13px] leading-snug font-medium">
-                  {m.title}
-                </span>
-                <span className="text-muted-foreground mt-0.5 block truncate text-[12px]">
-                  {m.name} · {statusLabel[m.status]}
-                  {m.status === "running" || m.status === "starting"
-                    ? ` · ${m.uptime}`
-                    : null}
-                </span>
-              </span>
-              <span className="text-muted-foreground/80 shrink-0 pt-0.5 font-mono text-[11px]">
-                {m.region}
-              </span>
+              <X size={16} aria-hidden="true" />
             </button>
-          </li>
+          ) : null}
+        </div>
+        <label className="mm-fleet-sort">
+          Sort by
+          <select
+            value={sort}
+            onChange={(event) => setSort(event.target.value as FleetSort)}
+          >
+            <option value="active">Active first</option>
+            <option value="name">Name A–Z</option>
+          </select>
+        </label>
+      </div>
+      <div
+        className="mm-fleet-filters"
+        role="group"
+        aria-label="Filter by machine status"
+      >
+        {filters.map((filter) => (
+          <button
+            key={filter.value}
+            type="button"
+            aria-pressed={status === filter.value}
+            onClick={() => setStatus(filter.value)}
+          >
+            {filter.label}
+            <span>
+              {filter.value === "all"
+                ? machines.length
+                : machines.filter((m) => m.status === filter.value).length}
+            </span>
+          </button>
         ))}
-      </ul>
+      </div>
+      <p className="sr-only" role="status">
+        {visible.length} of {machines.length} machines shown
+      </p>
+      {visible.length ? (
+        <div className="mm-machine-table">
+          <div className="mm-machine-table-heading" aria-hidden="true">
+            <span>Machine</span>
+            <span>Resources</span>
+            <span>Status</span>
+            <span>Open</span>
+          </div>
+          <ul>
+            {visible.map((machine) => (
+              <li key={machine.id} className="mm-machine-row">
+                <button
+                  type="button"
+                  className="mm-machine-name"
+                  onClick={() => onSelectMachine(machine.id)}
+                  aria-label={`View details for ${machine.name}`}
+                >
+                  <Server size={20} strokeWidth={1.6} aria-hidden="true" />
+                  <span>
+                    <strong>{machine.name}</strong>
+                    <span>{machine.task || machine.title}</span>
+                    <small>
+                      {machine.agent === "any"
+                        ? "General workspace"
+                        : machine.agent}{" "}
+                      · {machine.region}
+                    </small>
+                  </span>
+                  <ChevronRight size={15} aria-hidden="true" />
+                </button>
+                <p className="mm-machine-resources">
+                  <span>{machine.cpu} vCPU</span>
+                  <span>{machine.memoryGb} GB memory</span>
+                </p>
+                <div className="mm-machine-status">
+                  <span
+                    className="mm-status-label"
+                    data-status={machine.status}
+                  >
+                    <span aria-hidden="true" />
+                    {statusLabel[machine.status]}
+                  </span>
+                  <small>
+                    {machine.status === "running"
+                      ? `Up ${machine.uptime}`
+                      : machine.status === "starting"
+                        ? "Preparing workspace"
+                        : machine.status === "error"
+                          ? "Open details to recover"
+                          : "Workspace stopped"}
+                  </small>
+                </div>
+                <div className="mm-machine-open">
+                  {machine.status === "running" && machine.emulatorUrl ? (
+                    <a
+                      href={machine.emulatorUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Open console for ${machine.name}`}
+                    >
+                      <Terminal size={16} aria-hidden="true" />
+                      <span>Console</span>
+                    </a>
+                  ) : null}
+                  {machine.status === "running" && machine.appUrl ? (
+                    <a
+                      href={machine.appUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Open app for ${machine.name}`}
+                    >
+                      <Globe size={16} aria-hidden="true" />
+                      <span>App</span>
+                    </a>
+                  ) : null}
+                  {machine.status !== "running" ||
+                  (!machine.emulatorUrl && !machine.appUrl) ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectMachine(machine.id)}
+                    >
+                      Details <ChevronRight size={14} aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="mm-no-machines">
+          <Search size={24} aria-hidden="true" />
+          <h2>No machines match these filters.</h2>
+          <p>Try another name, task, or machine status.</p>
+          <button
+            type="button"
+            className="mm-dashboard-button mm-dashboard-button-secondary"
+            onClick={clear}
+          >
+            Clear filters
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
 
+export function FleetList({ machines }: { machines: Machine[] }) {
+  const router = useRouter();
+  const [refreshing, startTransition] = useTransition();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected =
+    machines.find((machine) => machine.id === selectedId) ?? null;
+  useEffect(() => {
+    const sync = () => {
+      const id = window.location.hash.slice(1);
+      if (id && id !== "new") setSelectedId(id);
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+  const select = (id: string) => {
+    setSelectedId(id);
+    window.history.replaceState(null, "", `#${id}`);
+  };
+  return (
+    <>
+      <MachineList
+        machines={machines}
+        onSelectMachine={select}
+        refreshAction={
+          <button
+            type="button"
+            className="mm-refresh-fleet"
+            onClick={() => startTransition(() => router.refresh())}
+            disabled={refreshing}
+          >
+            <RefreshCw size={15} aria-hidden="true" />
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+        }
+      />
       <MachineDetailDrawer
+        key={selected?.id ?? "closed"}
         machine={selected}
-        open={open}
-        onOpenChange={(next) => {
-          if (!next) {
-            setSelected(null);
-            if (window.location.hash.replace(/^#/, "") !== "new") {
-              window.history.replaceState(null, "", "/dashboard");
-            }
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedId(null);
+            window.history.replaceState(
+              null,
+              "",
+              `${window.location.pathname}${window.location.search}`,
+            );
           }
         }}
       />
