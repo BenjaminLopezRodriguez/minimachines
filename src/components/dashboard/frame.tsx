@@ -1,4 +1,6 @@
-import { ArrowUpRight, Command, LogOut } from "lucide-react";
+import { BrandMark } from "~/components/brand-mark";
+import { ThemeToggle } from "~/components/theme-toggle";
+import { ArrowUpRight, LogOut } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { DashboardNavigation } from "./navigation";
@@ -22,10 +24,13 @@ export function DashboardFrame({
         Skip to workspace
       </a>
       <aside className="mm-dashboard-sidebar">
-        <Link href="/" className="mm-dashboard-brand">
-          <Command size={21} aria-hidden="true" />
-          minimachines
-        </Link>
+        <div className="mm-dashboard-brand-row">
+          <Link href="/" className="mm-dashboard-brand">
+            <BrandMark className="mm-brand-mark" />
+            minimachines
+          </Link>
+          <ThemeToggle />
+        </div>
         <p className="mm-workspace-label">Your workspace</p>
         <DashboardNavigation activePath={navigationPath} />
         <div className="mm-sidebar-help">

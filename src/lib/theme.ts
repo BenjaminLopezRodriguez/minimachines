@@ -1,0 +1,2 @@
+// Runs before the first paint; storage can be unavailable in private browsers.
+export const themeScript = `(function(){var t="system";try{var s=localStorage.getItem("minimachines-theme");if(s==="light"||s==="dark"||s==="system")t=s}catch(e){}var r=document.documentElement;r.dataset.themePreference=t;r.dataset.theme=t==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t})()`;

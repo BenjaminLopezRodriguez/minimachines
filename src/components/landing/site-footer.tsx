@@ -1,3 +1,4 @@
+import { BrandMark } from "~/components/brand-mark";
 import Link from "next/link";
 
 export function SiteFooter() {
@@ -5,7 +6,7 @@ export function SiteFooter() {
     <footer className="mm-site-footer mm-container">
       <div>
         <Link href="/" className="mm-wordmark">
-          minimachines
+          <BrandMark className="mm-brand-mark" /> minimachines
         </Link>
         <p>More room for the work.</p>
       </div>

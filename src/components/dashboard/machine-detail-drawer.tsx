@@ -6,6 +6,7 @@ import {
   Copy,
   ExternalLink,
   Globe,
+  GitBranch,
   Lock,
   RotateCcw,
   Square,
@@ -323,6 +324,12 @@ function QuickActions({
           </li>
         ) : null}
         <li>
+          <a href={`/dashboard/git?machine=${encodeURIComponent(machine.id)}`} className={actionRow}>
+            <GitBranch size={16} aria-hidden="true" />
+            Open Git workspace
+          </a>
+        </li>
+        <li>
           <button
             type="button"
             className={actionRow}
@@ -417,6 +424,8 @@ function QuickActions({
 
 function RemotePanel({ machine }: { machine: Machine }) {
   const [cmd, setCmd] = useState("");
+  const [saveCheckpoint, setSaveCheckpoint] = useState(false);
+  const [repositoryPath, setRepositoryPath] = useState("/workspace");
   const canRun = machine.status === "running";
   const exec = api.machines.exec.useMutation();
   const result = exec.data;
@@ -424,7 +433,7 @@ function RemotePanel({ machine }: { machine: Machine }) {
   const run = () => {
     const trimmed = cmd.trim();
     if (!trimmed || !canRun || exec.isPending) return;
-    exec.mutate({ id: machine.id, cmd: trimmed });
+    exec.mutate({ id: machine.id, cmd: trimmed, checkpoint: saveCheckpoint ? { path: repositoryPath, label: "Before dashboard command", agent: machine.agent } : undefined });
   };
 
   return (
@@ -462,6 +471,11 @@ function RemotePanel({ machine }: { machine: Machine }) {
         </Button>
       </div>
 
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <input type="checkbox" checked={saveCheckpoint} onChange={e => setSaveCheckpoint(e.target.checked)} disabled={!canRun || exec.isPending} />
+        Save a checkpoint before running
+      </label>
+      {saveCheckpoint && <input aria-label="Checkpoint repository path" value={repositoryPath} onChange={e => setRepositoryPath(e.target.value)} className="w-full rounded-md border border-border px-3 py-2 text-xs" placeholder="/workspace/my-project" disabled={exec.isPending} />}
       {!canRun ? (
         <p className="text-muted-foreground px-0.5 text-[11px]">
           Start the machine to run commands.
@@ -498,6 +512,7 @@ function RemotePanel({ machine }: { machine: Machine }) {
           <p className="border-border text-muted-foreground border-t px-2.5 py-1.5 font-mono text-[11px] tabular-nums">
             exit {result.exitCode} · {result.durationMs}ms
           </p>
+          {result.checkpointRef && <a className="mm-dashboard-text-link px-3 py-2 text-xs" href={`/dashboard/git?machine=${encodeURIComponent(machine.id)}`}>View saved checkpoint</a>}
         </div>
       ) : null}
     </div>

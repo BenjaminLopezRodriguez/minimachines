@@ -1,5 +1,7 @@
 import { apiKeysRouter } from "~/server/api/routers/apiKeys";
 import { machinesRouter } from "~/server/api/routers/machines";
+import { gitRouter } from "~/server/api/routers/git";
+import { botsRouter } from "~/server/api/routers/bots";
 import { partnersRouter } from "~/server/api/routers/partners";
 import { pushRouter } from "~/server/api/routers/push";
 import { sharesRouter } from "~/server/api/routers/shares";
@@ -14,6 +16,8 @@ import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 export const appRouter = createTRPCRouter({
   waitlist: waitlistRouter,
   machines: machinesRouter,
+  git: gitRouter,
+  bots: botsRouter,
   apiKeys: apiKeysRouter,
   partners: partnersRouter,
   shares: sharesRouter,

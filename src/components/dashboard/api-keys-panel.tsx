@@ -1,5 +1,6 @@
 "use client";
 
+import { PageSwitcher } from "./page-switcher";
 import { useState } from "react";
 import { Copy, KeyRound, Trash2 } from "lucide-react";
 
@@ -38,8 +39,10 @@ export function ApiKeysPanel() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-medium tracking-tight">API keys</h1>
-        <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+        <h1 className="text-lg font-medium tracking-tight">
+          <PageSwitcher title="API keys" />
+        </h1>
+        <p className="text-muted-foreground mt-1 max-w-xl text-sm">
           Authenticate the{" "}
           <code className="font-mono text-[13px]">minimachine</code> SDK and MCP
           against this account. Secrets are shown once.
@@ -47,16 +50,20 @@ export function ApiKeysPanel() {
       </div>
 
       {revealed ? (
-        <div className="space-y-2 rounded-md border border-border bg-white/[0.02] p-4">
+        <div className="border-border space-y-2 rounded-md border bg-white/[0.02] p-4">
           <p className="text-sm font-medium">Copy your key now</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             It will not be shown again.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <code className="flex-1 break-all rounded-md border border-border bg-background px-3 py-2 font-mono text-xs">
+            <code className="border-border bg-background flex-1 rounded-md border px-3 py-2 font-mono text-xs break-all">
               {revealed}
             </code>
-            <Button type="button" variant="outline" onClick={() => void copySecret()}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void copySecret()}
+            >
               <Copy className="size-3.5" aria-hidden />
               {copied ? "Copied" : "Copy"}
             </Button>
@@ -95,11 +102,11 @@ export function ApiKeysPanel() {
       <div className="space-y-2">
         <h2 className="text-sm font-medium">Active keys</h2>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-muted-foreground text-sm">Loading…</p>
         ) : keys.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No keys yet.</p>
+          <p className="text-muted-foreground text-sm">No keys yet.</p>
         ) : (
-          <ul className="divide-y divide-border rounded-md border border-border">
+          <ul className="divide-border border-border divide-y rounded-md border">
             {keys.map((key) => (
               <li
                 key={key.id}
@@ -107,7 +114,7 @@ export function ApiKeysPanel() {
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm">{key.label}</p>
-                  <p className="font-mono text-[11px] text-muted-foreground">
+                  <p className="text-muted-foreground font-mono text-[11px]">
                     mm_{key.keyPrefix}…
                   </p>
                 </div>
@@ -128,10 +135,10 @@ export function ApiKeysPanel() {
         )}
       </div>
 
-      <div className="rounded-md border border-border p-4 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">Agent setup</p>
+      <div className="border-border text-muted-foreground rounded-md border p-4 text-sm">
+        <p className="text-foreground font-medium">Agent setup</p>
         <pre className="mt-2 overflow-x-auto font-mono text-[12px] leading-relaxed">
-{`export MINIMACHINE_API_KEY=mm_…
+          {`export MINIMACHINE_API_KEY=mm_…
 export MINIMACHINE_BASE_URL=http://localhost:3000
 npx minimachine-mcp`}
         </pre>

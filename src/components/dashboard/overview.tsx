@@ -1,3 +1,4 @@
+import { PageSwitcher } from "./page-switcher";
 import { ArrowRight, Terminal } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -13,7 +14,9 @@ export function DashboardOverview({
     <div className="mm-dashboard-overview">
       <div className="mm-dashboard-heading">
         <div>
-          <h1>Machines</h1>
+          <h1>
+            <PageSwitcher title="Machines" />
+          </h1>
           <p>A workspace for every build, test, and agent session.</p>
         </div>
         {createAction}

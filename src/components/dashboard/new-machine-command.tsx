@@ -319,11 +319,12 @@ export function NewMachineCommand() {
       }}
       trigger={
         <button
+          aria-label="New machine"
           type="button"
           className="mm-dashboard-button mm-dashboard-button-primary"
         >
           <Plus size={17} aria-hidden="true" />
-          New machine
+          <span className="mm-create-trigger-label">New machine</span>
         </button>
       }
       templates={templates.data ?? []}

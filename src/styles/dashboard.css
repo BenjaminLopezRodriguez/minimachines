@@ -1,13 +1,5 @@
 /* Workspace UI: clear hierarchy, tactile controls, and complete mobile navigation. */
 .mm-dashboard-shell {
-  --background: #16171b;
-  --foreground: #f0f0f5;
-  --card: #1d1e25;
-  --surface: #1a1b21;
-  --muted-foreground: #aaacba;
-  --border: #343640;
-  --signal: #b4c2ff;
-  --ring: #b4c2ff;
   display: flex;
   min-height: 100vh;
   font-size: 14px;
@@ -20,7 +12,7 @@
 .mm-dashboard-shell :is(a, button, input, select):focus-visible,
 .mm-create-dialog :is(a, button, input):focus-visible,
 .mm-machine-drawer :is(a, button, input, [role="tabpanel"]):focus-visible {
-  outline: 2px solid #b4c2ff;
+  outline: 2px solid var(--signal);
   outline-offset: 3px;
 }
 .mm-dashboard-skip {
@@ -28,10 +20,10 @@
   top: 12px;
   left: 16px;
   z-index: 50;
-  background: #edf0ff;
-  color: #1d1e25;
+  background: var(--primary);
+  color: var(--card);
   padding: 12px 18px;
-  border-radius: 8px;
+  border-radius: 12px;
   transform: translateY(-160%);
 }
 .mm-dashboard-skip:focus {
@@ -77,7 +69,7 @@
   padding: 10px 12px;
   color: var(--muted-foreground);
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 13px;
   font-weight: 500;
   transition:
@@ -85,14 +77,14 @@
     color 150ms ease-out;
 }
 .mm-dashboard-nav a:hover {
-  background: rgb(255 255 255 / 4%);
+  background: var(--hover);
   color: var(--foreground);
 }
 .mm-dashboard-nav a[aria-current="page"] {
   color: var(--foreground);
-  background: #2a2c36;
-  border-color: #3b3e4c;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+  background: var(--secondary);
+  border-color: var(--border);
+  box-shadow: none;
 }
 .mm-dashboard-nav a[aria-current="page"] svg {
   color: var(--signal);
@@ -135,11 +127,11 @@
   width: 32px;
   height: 32px;
   flex-shrink: 0;
-  border-radius: 9px;
-  background: #30333f;
-  border: 1px solid #45495b;
+  border-radius: 12px;
+  background: var(--secondary);
+  border: 1px solid var(--border);
   font-size: 12px;
-  color: #e1e6ff;
+  color: var(--signal);
 }
 .mm-dashboard-account > div {
   min-width: 0;
@@ -164,11 +156,11 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: 7px;
+  border-radius: 12px;
   color: var(--muted-foreground);
 }
 .mm-dashboard-account button:hover {
-  background: #2a2c36;
+  background: var(--secondary);
   color: var(--foreground);
 }
 .mm-dashboard-canvas {
@@ -180,7 +172,7 @@
   align-items: center;
   gap: 12px;
   min-height: 64px;
-  padding: 12px 36px;
+  padding: 8px 24px;
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   color: var(--muted-foreground);
@@ -202,14 +194,14 @@
 .mm-dashboard-content {
   max-width: 1424px;
   margin-inline: auto;
-  padding: 40px 36px 64px;
+  padding: 28px 24px 48px;
 }
 .mm-dashboard-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 .mm-dashboard-heading h1 {
   margin: 0;
@@ -225,16 +217,18 @@
   max-width: 55ch;
 }
 .mm-dashboard-button {
+  color: var(--primary-foreground);
+  background: var(--primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
   min-height: 44px;
   padding: 11px 16px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid transparent;
-  font-size: 13px;
-  font-weight: 550;
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1.4;
   cursor: pointer;
   flex-shrink: 0;
@@ -243,23 +237,19 @@
     transform 150ms ease-out;
 }
 .mm-dashboard-button-primary {
-  color: #20232e;
-  border-color: #c3c9dc;
-  background: linear-gradient(180deg, #f9faff, #d8ddeb);
-  box-shadow:
-    inset 0 1px 0 #fff,
-    0 1px 3px rgb(0 0 0 / 25%);
+  color: var(--primary-foreground);
+  border-color: transparent;
+  background: var(--primary);
 }
 .mm-dashboard-button-secondary {
-  color: #eeeef5;
-  border-color: #464957;
-  background: linear-gradient(180deg, #333642, #272a34);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%);
+  color: var(--foreground);
+  border-color: transparent;
+  background: var(--secondary);
 }
 .mm-dashboard-button-danger {
-  color: #2c171a;
-  border-color: #f4a2a9;
-  background: #f9b3b9;
+  color: var(--destructive);
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
 }
 .mm-dashboard-button:disabled {
   opacity: 0.45;
@@ -311,7 +301,7 @@
   opacity: 0.5;
 }
 .mm-attention-count {
-  color: #ffd09b;
+  color: var(--warning);
 }
 .mm-refresh-fleet {
   display: inline-flex;
@@ -323,10 +313,10 @@
   color: var(--muted-foreground);
   padding-inline: 10px;
   font-size: 12px;
-  border-radius: 7px;
+  border-radius: 12px;
 }
 .mm-refresh-fleet:hover {
-  background: #24262e;
+  background: var(--secondary);
   color: var(--foreground);
 }
 .mm-refresh-fleet:disabled {
@@ -346,8 +336,8 @@
   width: min(100%, 420px);
   gap: 9px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #1c1e25;
+  border-radius: 12px;
+  background: var(--card);
   padding-left: 12px;
 }
 .mm-machine-search > svg {
@@ -364,7 +354,7 @@
 }
 .mm-machine-search input::placeholder,
 .mm-template-search input::placeholder {
-  color: #a7aaba;
+  color: var(--muted-foreground);
 }
 .mm-machine-search input::-webkit-search-cancel-button {
   appearance: none;
@@ -388,10 +378,10 @@
 .mm-fleet-sort select {
   min-height: 44px;
   padding: 8px 30px 8px 12px;
-  border-radius: 8px;
+  border-radius: 12px;
   border: 1px solid var(--border);
   color: var(--foreground);
-  background: #1c1e25;
+  background: var(--card);
   font-size: 12px;
 }
 .mm-fleet-filters {
@@ -411,7 +401,7 @@
   min-height: 44px;
   padding: 9px 12px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 12px;
   color: var(--muted-foreground);
   transition:
@@ -419,12 +409,12 @@
     color 150ms ease-out;
 }
 .mm-fleet-filters button:hover {
-  background: #23252e;
+  background: var(--secondary);
 }
 .mm-fleet-filters button[aria-pressed="true"] {
   color: var(--foreground);
-  border-color: #424655;
-  background: #282b35;
+  border-color: var(--border);
+  background: var(--secondary);
 }
 .mm-fleet-filters button > span {
   color: var(--muted-foreground);
@@ -434,7 +424,7 @@
 .mm-machine-table {
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: #1a1b22;
+  background: var(--card);
   overflow: hidden;
 }
 .mm-machine-table-heading,
@@ -449,7 +439,7 @@
   color: var(--muted-foreground);
   font-size: 11px;
   border-bottom: 1px solid var(--border);
-  background: #1e2028;
+  background: var(--surface);
 }
 .mm-machine-table-heading > span:last-child {
   text-align: right;
@@ -460,14 +450,14 @@
   list-style: none;
 }
 .mm-machine-row {
-  min-height: 116px;
-  padding-block: 20px;
+  min-height: 96px;
+  padding-block: 16px;
 }
 .mm-machine-row + .mm-machine-row {
   border-top: 1px solid var(--border);
 }
 .mm-machine-row:hover {
-  background: #1e2029;
+  background: var(--secondary);
 }
 .mm-machine-name {
   display: flex;
@@ -479,7 +469,7 @@
   border-radius: 4px;
 }
 .mm-machine-name > svg:first-child {
-  color: #a6afcb;
+  color: var(--muted-foreground);
   flex-shrink: 0;
 }
 .mm-machine-name > svg:last-child {
@@ -513,7 +503,7 @@
 }
 .mm-machine-name small {
   display: block;
-  color: #a1a5b5;
+  color: var(--muted-foreground);
   font-size: 11px;
   margin-top: 5px;
 }
@@ -539,7 +529,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: #d3d5e1;
+  color: var(--foreground);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -547,26 +537,26 @@
   display: block;
   width: 6px;
   height: 6px;
-  background: #8b91a7;
+  background: var(--muted-foreground);
   border-radius: 50%;
 }
 .mm-status-label[data-status="running"] {
-  color: #b5e8c6;
+  color: var(--success);
 }
 .mm-status-label[data-status="running"] > span {
-  background: #a0dcb4;
+  background: var(--success);
 }
 .mm-status-label[data-status="starting"] {
-  color: #bfceff;
+  color: var(--signal);
 }
 .mm-status-label[data-status="starting"] > span {
-  background: #a7bfff;
+  background: var(--signal);
 }
 .mm-status-label[data-status="error"] {
-  color: #ffd09b;
+  color: var(--warning);
 }
 .mm-status-label[data-status="error"] > span {
-  background: #ffc485;
+  background: var(--warning);
 }
 .mm-machine-status small {
   font-size: 10px;
@@ -586,26 +576,26 @@
   min-width: 44px;
   min-height: 44px;
   padding-inline: 8px;
-  color: #cbd2ed;
+  color: var(--signal);
   font-size: 11px;
-  border: 1px solid #3c4151;
-  border-radius: 7px;
-  background: #242833;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--secondary);
 }
 .mm-machine-open :is(a, button):hover {
-  color: #fff;
-  border-color: #67718e;
-  background: #303645;
+  color: var(--foreground);
+  border-color: var(--border);
+  background: var(--secondary);
 }
 .mm-fleet-empty {
   display: flex;
   align-items: center;
   flex-direction: column;
   text-align: center;
-  padding: 60px 24px;
+  padding: 40px 20px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: #1b1d24;
+  background: var(--card);
 }
 .mm-empty-machine {
   display: flex;
@@ -614,11 +604,11 @@
   width: 72px;
   height: 60px;
   margin: 0 0 28px;
-  color: #bec8e8;
-  border: 1px solid #4a5269;
+  color: var(--signal);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: #252b3a;
-  box-shadow: inset 0 1px 0 #48516a;
+  background: var(--signal-soft);
+  box-shadow: inset 0 1px 0 var(--border);
   position: relative;
 }
 .mm-empty-machine > span {
@@ -628,7 +618,7 @@
   bottom: 10px;
   right: 10px;
   border-radius: 50%;
-  background: #c6d1ff;
+  background: var(--signal);
 }
 .mm-fleet-empty h2,
 .mm-no-machines h2 {
@@ -672,8 +662,8 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-top: 36px;
-  padding: 24px 4px;
+  margin-top: 24px;
+  padding: 16px 4px;
   border-top: 1px solid var(--border);
 }
 .mm-dashboard-setup > svg {
@@ -701,11 +691,6 @@
   white-space: nowrap;
 }
 .mm-create-dialog {
-  --foreground: #f0f0f5;
-  --muted-foreground: #b0b3c2;
-  --background: #1c1e26;
-  --border: #3b3f4d;
-  --signal: #becaff;
   width: calc(100% - 32px);
   max-width: 640px !important;
   max-height: calc(100dvh - 40px);
@@ -714,7 +699,7 @@
   padding: 0;
   gap: 0;
   border-radius: 14px;
-  background: #1c1e26;
+  background: var(--card);
   color: var(--foreground);
   border-color: var(--border);
 }
@@ -723,7 +708,7 @@
   align-items: start;
   justify-content: space-between;
   gap: 20px;
-  padding: 26px 28px 20px;
+  padding: 20px 20px 16px;
   border-bottom: 1px solid var(--border);
 }
 .mm-create-header [data-slot="dialog-title"] {
@@ -744,18 +729,18 @@
   width: 44px;
   height: 44px;
   flex-shrink: 0;
-  border-radius: 8px;
+  border-radius: 12px;
   color: var(--muted-foreground);
   margin: -8px -8px 0 0;
 }
 .mm-create-header > button:hover {
-  background: #303441;
+  background: var(--secondary);
 }
 .mm-create-header > button:disabled {
   opacity: 0.4;
 }
 .mm-create-body {
-  padding: 24px 28px;
+  padding: 16px 20px;
 }
 .mm-template-picker {
   border: 0;
@@ -774,9 +759,9 @@
   gap: 9px;
   padding-inline: 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 12px;
   color: var(--muted-foreground);
-  background: #171921;
+  background: var(--surface);
 }
 .mm-template-search input {
   width: 100%;
@@ -811,18 +796,18 @@
   display: block;
   padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 9px;
-  background: #20232c;
+  border-radius: 12px;
+  background: var(--card);
   transition:
     background 150ms ease-out,
     border-color 150ms ease-out;
 }
 .mm-template-option input:checked + span {
-  background: #2b3041;
-  border-color: #929fcb;
+  background: var(--signal-soft);
+  border-color: var(--signal-border);
 }
 .mm-template-option input:focus-visible + span {
-  outline: 2px solid #c1cdff;
+  outline: 2px solid var(--signal);
   outline-offset: 2px;
 }
 .mm-template-option-content > span:first-child {
@@ -835,7 +820,7 @@
   font-weight: 500;
 }
 .mm-template-option-content svg {
-  color: #c1cdff;
+  color: var(--signal);
   margin-left: auto;
 }
 .mm-template-option-content > span:nth-child(2) {
@@ -846,7 +831,7 @@
   line-height: 1.55;
 }
 .mm-template-option-content small {
-  color: #b7bed3;
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 .mm-create-fields {
@@ -873,13 +858,13 @@
   padding: 10px 12px;
   margin-bottom: 20px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #171921;
+  border-radius: 12px;
+  background: var(--surface);
   color: var(--foreground);
   font-size: 13px;
 }
 .mm-create-fields input::placeholder {
-  color: #a7aaba;
+  color: var(--muted-foreground);
 }
 .mm-create-review {
   border-top: 1px solid var(--border);
@@ -907,9 +892,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 20px 28px;
+  padding: 16px 20px;
   border-top: 1px solid var(--border);
-  background: #20232c;
+  background: var(--card);
 }
 .mm-create-footer > span {
   max-width: 30ch;
@@ -920,7 +905,7 @@
 .mm-create-error,
 .mm-template-error {
   font-size: 13px;
-  color: #ffc2c6;
+  color: var(--destructive);
   margin-top: 16px;
 }
 .mm-template-error {
@@ -936,9 +921,9 @@
   display: block;
   height: 80px;
   margin-bottom: 8px;
-  border: 1px solid #3b3f4d;
-  border-radius: 8px;
-  background: #272b36;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--secondary);
 }
 .mm-template-loading p {
   color: var(--muted-foreground);
@@ -973,10 +958,10 @@
 }
 .mm-machine-confirm {
   margin: 14px 6px 4px;
-  padding: 18px;
-  border: 1px solid #4c424b;
-  background: #282128;
-  border-radius: 10px;
+  padding: 16px;
+  border: 1px solid var(--danger-border);
+  background: var(--danger-soft);
+  border-radius: 12px;
 }
 .mm-machine-confirm h3 {
   font-size: 14px;
@@ -984,7 +969,7 @@
   margin: 0 0 10px;
 }
 .mm-machine-confirm p {
-  color: #c3b8bf;
+  color: var(--foreground);
   font-size: 12px;
   line-height: 1.65;
   margin: 0 0 18px;
@@ -1000,7 +985,7 @@
     width: 212px;
   }
   .mm-dashboard-content {
-    padding-inline: 26px;
+    padding-inline: 24px;
   }
   .mm-machine-table-heading,
   .mm-machine-row {
@@ -1069,7 +1054,7 @@
     display: none;
   }
   .mm-dashboard-content {
-    padding: 30px 24px 48px;
+    padding: 24px 20px 40px;
   }
   .mm-machine-table-heading,
   .mm-machine-row {
@@ -1112,7 +1097,7 @@
   }
   .mm-machine-row {
     grid-template-columns: minmax(0, 1fr) auto;
-    padding: 18px;
+    padding: 16px;
     gap: 16px 12px;
   }
   .mm-machine-name {
@@ -1161,7 +1146,7 @@
     margin-left: 35px;
   }
   .mm-fleet-empty {
-    padding: 42px 20px;
+    padding: 32px 16px;
   }
   .mm-fleet-empty h2 {
     font-size: 21px;
@@ -1209,16 +1194,16 @@
     width: 100%;
   }
   .mm-create-header {
-    padding: 22px 20px 18px;
+    padding: 16px;
   }
   .mm-create-body {
-    padding: 18px 20px;
+    padding: 16px;
   }
   .mm-create-footer {
     flex-direction: column;
     align-items: stretch;
     gap: 14px;
-    padding: 18px 20px;
+    padding: 16px;
   }
   .mm-create-footer > span {
     max-width: none;
@@ -1245,5 +1230,62 @@
   }
   .mm-template-option input:checked + span {
     outline: 2px solid Highlight;
+  }
+}
+
+.mm-dashboard-nav a[aria-current="page"] {
+  background: var(--signal-soft);
+  border-color: transparent;
+  color: var(--signal);
+}
+.mm-dashboard-heading h1 {
+  font-size: 32px;
+  font-weight: 500;
+}
+.mm-dashboard-brand {
+  font-size: 20px;
+}
+.mm-machine-table,
+.mm-fleet-empty {
+  border-radius: 16px;
+}
+.mm-account-avatar {
+  background: var(--signal-soft);
+  border-color: transparent;
+  color: var(--signal);
+}
+.mm-dashboard-account {
+  flex-wrap: wrap;
+}
+.mm-dashboard-account > .mm-theme-toggle {
+  width: 36px;
+  height: 36px;
+}
+
+.mm-dashboard-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+.mm-dashboard-brand-row .mm-dashboard-brand {
+  padding-inline: 0;
+  gap: 8px;
+  font-size: 18px;
+}
+.mm-dashboard-brand-row .mm-brand-mark {
+  width: 28px;
+}
+@media (max-width: 920px) {
+  .mm-dashboard-brand-row {
+    grid-column: 1;
+    grid-row: 1;
+    justify-content: start;
+    gap: 12px;
+  }
+}
+@media (max-width: 700px) {
+  .mm-dashboard-account > div {
+    display: none;
   }
 }

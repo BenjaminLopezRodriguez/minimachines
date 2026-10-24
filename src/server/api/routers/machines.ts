@@ -57,13 +57,14 @@ export const machinesRouter = createTRPCRouter({
         id: z.string().min(1),
         cmd: z.string().min(1).max(4000),
         cwd: z.string().max(512).optional(),
+        checkpoint: z.object({ path: z.string().min(1).max(512), label: z.string().max(200).optional(), agent: z.string().max(64).optional() }).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
         const result = await execMachine(
           input.id,
-          { cmd: input.cmd, cwd: input.cwd },
+          { cmd: input.cmd, cwd: input.cwd, checkpoint: input.checkpoint },
           { ownerUserId: ctx.userId },
         );
         return {
@@ -71,6 +72,7 @@ export const machinesRouter = createTRPCRouter({
           stdout: result.stdout,
           stderr: result.stderr,
           durationMs: result.durationMs,
+          checkpointRef: result.checkpointRef,
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : "Exec failed";

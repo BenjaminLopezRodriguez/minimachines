@@ -27,7 +27,7 @@ const authkit = authkitMiddleware({
 });
 
 const AUTH_PATHS =
-  /^\/(dashboard|pager|sign-in|sign-up|auth|api\/trpc)(?:\/|$)/;
+  /^\/(dashboard|bots|pager|sign-in|sign-up|auth|api\/trpc)(?:\/|$)/;
 
 function shareSlug(host: string): string | null {
   const h = (host.split(":")[0] ?? "").toLowerCase();

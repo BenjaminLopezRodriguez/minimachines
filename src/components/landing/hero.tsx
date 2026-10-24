@@ -1,3 +1,4 @@
+import { BrandMark } from "~/components/brand-mark";
 import {
   ArrowRight,
   ArrowDown,
@@ -13,6 +14,10 @@ export function Hero() {
   return (
     <section className="mm-container mm-hero" aria-labelledby="hero-title">
       <div className="mm-hero-copy">
+        <div className="mm-hero-lockup" aria-hidden="true">
+          <BrandMark />
+          minimachines
+        </div>
         <p className="mm-intro">
           <span aria-hidden="true" />
           Cloud workspaces for coding agents

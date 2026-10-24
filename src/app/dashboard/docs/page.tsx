@@ -1,3 +1,4 @@
+import { PageSwitcher } from "~/components/dashboard/page-switcher";
 import Link from "next/link";
 import { InstallGuide } from "~/components/landing/install-guide";
 
@@ -7,9 +8,16 @@ export default function DashboardDocsPage() {
       <div className="mm-guide-heading">
         <p className="mm-intro">Get set up</p>
         <h1>
-          Your terminal.
-          <br />
-          <span>Your next machine.</span>
+          <PageSwitcher
+            title="Setup & docs"
+            desktopContent={
+              <>
+                Your terminal.
+                <br />
+                <span>Your next machine.</span>
+              </>
+            }
+          />
         </h1>
         <p className="mm-lead">
           Install the CLI and connect your coding agent.

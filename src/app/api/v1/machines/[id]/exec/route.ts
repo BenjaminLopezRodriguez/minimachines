@@ -23,6 +23,11 @@ export async function POST(request: Request, ctx: Ctx) {
       cmd: z.string().min(1),
       cwd: z.string().optional(),
       env: z.record(z.string()).optional(),
+      checkpoint: z.object({
+        path: z.string().min(1).max(512),
+        label: z.string().max(200).optional(),
+        agent: z.string().max(64).optional(),
+      }).optional(),
     })
     .safeParse(body);
   if (!parsed.success) {

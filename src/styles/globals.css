@@ -1,69 +1,126 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (@media (prefers-color-scheme: dark));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
+  --radius: 0.75rem;
   color-scheme: light;
-  --radius: 0.5rem;
-  --background: #f7f7f7;
-  --foreground: #141414;
+  --background: #f7f5ef;
+  --foreground: #15110c;
   --card: #ffffff;
-  --card-foreground: #141414;
   --popover: #ffffff;
-  --popover-foreground: #141414;
-  --primary: #141414;
-  --primary-foreground: #f2f2f2;
-  --secondary: #efefef;
-  --secondary-foreground: #141414;
-  --muted: #efefef;
-  --muted-foreground: #6b6b6b;
-  --accent: #efefef;
-  --accent-foreground: #141414;
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: #f7f7f7;
-  --success: oklch(0.62 0.19 149);
-  --success-foreground: #f7f7f7;
-  --border: rgb(20 20 20 / 9%);
-  --input: rgb(20 20 20 / 12%);
-  --ring: rgb(20 20 20 / 22%);
-  --surface: #f0f0f0;
-  --signal: #5b7c99;
+  --primary: #15110c;
+  --primary-foreground: #ffffff;
+  --secondary: #e7eaed;
+  --muted: #eeeee9;
+  --muted-foreground: #4e606f;
+  --accent: #e7eaed;
+  --destructive: #b73444;
+  --success: #237644;
+  --border: #d9dedd;
+  --input: #bec7cd;
+  --ring: #3558f5;
+  --surface: #eeeee9;
+  --signal: #3156e8;
+  --signal-soft: #e5eafe;
+  --signal-border: #a8b9fc;
+  --success-soft: #e5f3e8;
+  --success-border: #a1c9ae;
+  --danger-soft: #fff0f1;
+  --danger-border: #e6bac1;
+  --warning: #8b5a0b;
+  --warning-soft: #fff3dc;
+  --hover: rgb(5 54 89 / 8%);
+  --brand: #3558f5;
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
+  --secondary-foreground: var(--foreground);
+  --accent-foreground: var(--foreground);
+  --destructive-foreground: var(--background);
+  --success-foreground: var(--background);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #181919;
+  --foreground: #e8e3da;
+  --card: #202123;
+  --popover: #242628;
+  --primary: #dfe2e5;
+  --primary-foreground: #15110c;
+  --secondary: #30343a;
+  --muted: #25282b;
+  --muted-foreground: #b3bdc7;
+  --accent: #30343a;
+  --destructive: #ffadb6;
+  --success: #a6dfb7;
+  --border: #41474b;
+  --input: #59616b;
+  --ring: #9ab0ff;
+  --surface: #1e2022;
+  --signal: #a5b6ff;
+  --signal-soft: #293248;
+  --signal-border: #566b9f;
+  --success-soft: #20392b;
+  --success-border: #47785a;
+  --danger-soft: #40282c;
+  --danger-border: #86525b;
+  --warning: #f2cd8b;
+  --warning-soft: #3a3021;
+  --hover: rgb(223 226 229 / 8%);
+  --brand: #7590ff;
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
+  --secondary-foreground: var(--foreground);
+  --accent-foreground: var(--foreground);
+  --destructive-foreground: var(--background);
+  --success-foreground: var(--background);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     color-scheme: dark;
-    --background: #141414;
-    --foreground: #ededed;
-    --card: #191919;
-    --card-foreground: #ededed;
-    --popover: #191919;
-    --popover-foreground: #ededed;
-    --primary: #f2f2f2;
-    --primary-foreground: #141414;
-    --secondary: #1f1f1f;
-    --secondary-foreground: #ededed;
-    --muted: #1c1c1c;
-    --muted-foreground: #8c8c8c;
-    --accent: #1f1f1f;
-    --accent-foreground: #ededed;
-    --destructive: #f87171;
-    --destructive-foreground: #141414;
-    --success: #4ade80;
-    --success-foreground: #141414;
-    --border: rgb(255 255 255 / 8%);
-    --input: #1f1f1f;
-    --ring: rgb(255 255 255 / 18%);
-    --surface: #181818;
-    --signal: #81a1c1;
+    --background: #181919;
+    --foreground: #e8e3da;
+    --card: #202123;
+    --popover: #242628;
+    --primary: #dfe2e5;
+    --primary-foreground: #15110c;
+    --secondary: #30343a;
+    --muted: #25282b;
+    --muted-foreground: #b3bdc7;
+    --accent: #30343a;
+    --destructive: #ffadb6;
+    --success: #a6dfb7;
+    --border: #41474b;
+    --input: #59616b;
+    --ring: #9ab0ff;
+    --surface: #1e2022;
+    --signal: #a5b6ff;
+    --signal-soft: #293248;
+    --signal-border: #566b9f;
+    --success-soft: #20392b;
+    --success-border: #47785a;
+    --danger-soft: #40282c;
+    --danger-border: #86525b;
+    --warning: #f2cd8b;
+    --warning-soft: #3a3021;
+    --hover: rgb(223 226 229 / 8%);
+    --brand: #7590ff;
+    --card-foreground: var(--foreground);
+    --popover-foreground: var(--foreground);
+    --secondary-foreground: var(--foreground);
+    --accent-foreground: var(--foreground);
+    --destructive-foreground: var(--background);
+    --success-foreground: var(--background);
   }
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
-    monospace;
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -104,38 +161,12 @@
   }
 }
 
-/* Dashboard — Cursor-inspired app chrome (scoped; landing stays light).
-   Named .mm-app, distinct from the .mm-cursor blink below — same class for both
-   made the whole dashboard blink and blanked the hero caret. */
 .mm-app {
-  color-scheme: dark;
-  --background: #141414;
-  --foreground: #ededed;
-  --card: #191919;
-  --card-foreground: #ededed;
-  --popover: #191919;
-  --popover-foreground: #ededed;
-  --primary: #f2f2f2;
-  --primary-foreground: #141414;
-  --secondary: #1f1f1f;
-  --secondary-foreground: #ededed;
-  --muted: #1c1c1c;
-  --muted-foreground: #8c8c8c;
-  --accent: #1f1f1f;
-  --accent-foreground: #ededed;
-  --destructive: #f87171;
-  --destructive-foreground: #141414;
-  --success: #4ade80;
-  --success-foreground: #141414;
-  --border: rgb(255 255 255 / 8%);
-  --input: #1f1f1f;
-  --ring: rgb(255 255 255 / 18%);
-  --surface: #181818;
-  --signal: #81a1c1;
-  --radius: 0.5rem;
   background: var(--background);
   color: var(--foreground);
-  font-feature-settings: "ss01" on, "cv11" on;
+  font-feature-settings:
+    "ss01" on,
+    "cv11" on;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -145,7 +176,7 @@
 }
 
 .mm-cursor-inset {
-  background: rgb(255 255 255 / 3.5%);
+  background: var(--hover);
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
@@ -418,4 +449,48 @@
     -webkit-transform: none !important;
     transform: none !important;
   }
+}
+
+/* Shared Astryx-inspired controls. Themes also reach portals and dialogs. */
+.mm-brand-mark {
+  color: var(--brand);
+  flex-shrink: 0;
+}
+.mm-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--foreground);
+  background: transparent;
+  cursor: pointer;
+  transition: background 160ms ease-out;
+}
+.mm-theme-toggle:hover,
+.mm-theme-toggle[data-state="open"] {
+  background: var(--hover);
+}
+.mm-theme-toggle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.mm-theme-menu {
+  min-width: 184px;
+  padding: 6px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+.mm-theme-menu [role="menuitemradio"] {
+  min-height: 44px;
+  border-radius: 10px;
+  gap: 10px;
+  cursor: pointer;
+}
+.mm-theme-menu [data-slot="dropdown-menu-label"] {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  padding: 8px 10px;
 }

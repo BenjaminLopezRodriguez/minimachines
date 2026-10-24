@@ -16,6 +16,7 @@ import {
   writeSandboxFile,
 } from "./modal-driver";
 import { getMachine } from "./machine-store";
+import { machineGit } from "./git";
 
 export type ExecResult = {
   id: string;
@@ -27,6 +28,7 @@ export type ExecResult = {
   stderr: string;
   durationMs: number;
   createdAt: string;
+  checkpointRef?: string;
 };
 
 /** `execs.exitCode` while the command is still in flight. */
@@ -79,10 +81,15 @@ function shellQuote(s: string) {
 
 export async function execMachine(
   machineId: string,
-  input: { cmd: string; cwd?: string; env?: Record<string, string> },
+  input: { cmd: string; cwd?: string; env?: Record<string, string>; checkpoint?: { path: string; label?: string; agent?: string } },
   opts: { ownerUserId: string },
 ): Promise<ExecResult> {
   await requireOwnedMachine(machineId, opts.ownerUserId);
+  // Opt-in checkpoints fail closed: if saving fails, the agent command never runs.
+  const checkpoint = input.checkpoint ? await machineGit<{ ref: string }>(machineId, opts.ownerUserId, {
+    action: "checkpoint", path: input.checkpoint.path,
+    message: input.checkpoint.label ?? "Before agent command", agent: input.checkpoint.agent,
+  }) : undefined;
   const started = Date.now();
   let exitCode = 0;
   let stdout = `[minimachine stub] ran: ${input.cmd}\n`;
@@ -156,6 +163,7 @@ export async function execMachine(
     stderr: row.stderr,
     durationMs: row.durationMs,
     createdAt: row.createdAt.toISOString(),
+    checkpointRef: checkpoint?.ref,
   };
 }
 

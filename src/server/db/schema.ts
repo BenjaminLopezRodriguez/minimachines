@@ -302,3 +302,35 @@ export const pushSubscriptions = createTable(
     index("push_owner_idx").on(t.ownerUserId),
   ],
 );
+
+/** Bots is a separate conversation product; credentials stay on the selected machine. */
+export const bots = createTable("bot", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  ownerUserId: d.varchar({ length: 128 }).notNull(),
+  machineId: d.varchar({ length: 64 }).notNull(),
+  name: d.varchar({ length: 80 }).notNull(),
+  instructions: d.text().notNull(),
+  provider: d.varchar({ length: 16 }).notNull(),
+  createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+}), (t) => [index("bot_owner_idx").on(t.ownerUserId)]);
+
+export const botConversations = createTable("bot_conversation", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  botId: d.uuid().notNull().references(() => bots.id, { onDelete: "cascade" }),
+  ownerUserId: d.varchar({ length: 128 }).notNull(),
+  title: d.varchar({ length: 160 }).notNull().default("New conversation"),
+  generationId: d.uuid(),
+  generationStartedAt: d.timestamp({ withTimezone: true }),
+  createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+}), (t) => [index("bot_conversation_owner_idx").on(t.ownerUserId, t.botId)]);
+
+export const botMessages = createTable("bot_message", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  conversationId: d.uuid().notNull().references(() => botConversations.id, { onDelete: "cascade" }),
+  role: d.varchar({ length: 16 }).notNull(),
+  content: d.text().notNull(),
+  replyTo: d.uuid(),
+  createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+}), (t) => [index("bot_message_conversation_idx").on(t.conversationId, t.createdAt), uniqueIndex("bot_message_reply_idx").on(t.replyTo)]);

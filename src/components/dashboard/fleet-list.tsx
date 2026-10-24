@@ -6,6 +6,7 @@ import {
   Globe,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   Server,
   Terminal,
   X,
@@ -47,6 +48,7 @@ export function MachineList({
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<FleetFilter>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sort, setSort] = useState<FleetSort>("active");
   const visible = filterMachines(machines, query, status, sort);
   const active = machines.filter(
@@ -86,7 +88,11 @@ export function MachineList({
     );
 
   return (
-    <section className="mm-fleet" aria-label="Your machines">
+    <section
+      className="mm-fleet"
+      aria-label="Your machines"
+      data-filters-open={filtersOpen}
+    >
       <div className="mm-fleet-summary">
         <p>
           <strong>{machines.length}</strong>{" "}
@@ -128,6 +134,16 @@ export function MachineList({
             </button>
           ) : null}
         </div>
+        <button
+          className="mm-fleet-filter-trigger mm-icon-control"
+          aria-label={`Filter and sort machines${status !== "all" ? ": filters active" : ""}`}
+          aria-expanded={filtersOpen}
+          aria-controls="fleet-filter-options"
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          <SlidersHorizontal size={19} />
+          <span>{status !== "all" ? "1" : ""}</span>
+        </button>
         <label className="mm-fleet-sort">
           Sort by
           <select
@@ -140,6 +156,7 @@ export function MachineList({
         </label>
       </div>
       <div
+        id="fleet-filter-options"
         className="mm-fleet-filters"
         role="group"
         aria-label="Filter by machine status"

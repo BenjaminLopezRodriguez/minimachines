@@ -1,4 +1,6 @@
-import { ArrowUpRight, Command } from "lucide-react";
+import { BrandMark } from "~/components/brand-mark";
+import { ThemeToggle } from "~/components/theme-toggle";
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
 export function SiteHeader({ active }: { active?: "install" | "docs" }) {
@@ -14,10 +16,11 @@ export function SiteHeader({ active }: { active?: "install" | "docs" }) {
             className="mm-wordmark"
             aria-label="Mini Machines home"
           >
-            <Command size={22} strokeWidth={1.8} aria-hidden="true" />
+            <BrandMark className="mm-brand-mark" />
             minimachines
           </Link>
           <nav aria-label="Main navigation">
+            <ThemeToggle />
             <Link
               href="/install"
               aria-current={active === "install" ? "page" : undefined}

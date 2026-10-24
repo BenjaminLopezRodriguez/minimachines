@@ -1,12 +1,12 @@
 /* Public site: quiet content surfaces, tactile controls, and a real CLI path. */
 .mm-site {
-  --mm-bg: #f8f8fa;
-  --mm-ink: #191a20;
-  --mm-muted: #62636d;
-  --mm-line: #dedee4;
-  --mm-panel: #ffffff;
-  --mm-soft: #f0f0f4;
-  --mm-blue: #3658c9;
+  --mm-bg: var(--background);
+  --mm-ink: var(--foreground);
+  --mm-muted: var(--muted-foreground);
+  --mm-line: var(--border);
+  --mm-panel: var(--card);
+  --mm-soft: var(--secondary);
+  --mm-blue: var(--signal);
   min-height: 100vh;
   color: var(--mm-ink);
   background: var(--mm-bg);
@@ -39,7 +39,7 @@
   -webkit-tap-highlight-color: transparent;
 }
 .mm-container {
-  width: min(1120px, calc(100% - 64px));
+  width: min(1120px, calc(100% - 48px));
   margin-inline: auto;
 }
 .mm-skip {
@@ -48,7 +48,7 @@
   left: 16px;
   z-index: 50;
   padding: 12px 20px;
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--mm-ink);
   color: var(--mm-bg);
   transform: translateY(-160%);
@@ -89,7 +89,7 @@
   padding: 8px;
   color: var(--mm-muted);
   font-size: 14px;
-  border-radius: 8px;
+  border-radius: 12px;
   transition:
     color 160ms ease-out,
     background 160ms ease-out;
@@ -103,9 +103,7 @@
   color: var(--mm-ink);
   padding-inline: 16px;
   border: 1px solid var(--mm-line);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 70%),
-    0 1px 2px rgb(0 0 0 / 4%);
+  box-shadow: none;
 }
 .mm-hero {
   display: grid;
@@ -160,7 +158,7 @@
   justify-content: center;
   gap: 14px;
   padding: 12px 20px;
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 550;
   border: 1px solid transparent;
@@ -172,39 +170,15 @@
     filter 180ms ease-out;
 }
 .mm-gloss::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: linear-gradient(
-    120deg,
-    transparent 20%,
-    rgb(255 255 255 / 9%) 48%,
-    transparent 72%
-  );
-  opacity: 0.5;
-  transition: opacity 180ms ease-out;
-  pointer-events: none;
+  display: none;
 }
 .mm-gloss-primary {
-  color: #fff;
-  border-color: #17181d;
-  background: linear-gradient(180deg, #41434c 0%, #24252c 50%, #1c1d24 100%);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 28%),
-    inset 0 -1px 0 rgb(0 0 0 / 30%),
-    0 2px 4px rgb(22 23 29 / 16%);
-  text-shadow: 0 -1px 0 rgb(0 0 0 / 30%);
+  color: var(--primary-foreground);
+  background: var(--primary);
 }
 .mm-gloss-secondary {
-  color: #30313a;
-  border-color: #d0d0d8;
-  background: linear-gradient(180deg, #fff, #f1f1f5);
-  box-shadow:
-    inset 0 1px 0 #fff,
-    inset 0 -1px 0 rgb(0 0 0 / 3%),
-    0 1px 2px rgb(0 0 0 / 4%);
+  color: var(--foreground);
+  background: var(--secondary);
 }
 @media (hover: hover) {
   .mm-gloss:hover {
@@ -226,11 +200,11 @@
 }
 .mm-workbench {
   min-width: 0;
-  color: #ececf2;
-  background: #1c1d23;
-  border: 1px solid #35363e;
+  color: var(--foreground);
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 14px;
-  box-shadow: 0 24px 64px -32px rgb(18 19 29 / 35%);
+  box-shadow: none;
   overflow: hidden;
 }
 .mm-workbench-chrome {
@@ -240,19 +214,19 @@
   gap: 16px;
   padding: 16px 22px;
   font-size: 11px;
-  border-bottom: 1px solid #35363e;
-  color: #acadb9;
-  background: #24252c;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  background: var(--secondary);
 }
 .mm-workbench-chrome > span:first-child {
   display: inline-flex;
   gap: 8px;
   align-items: center;
   font-size: 12px;
-  color: #e3e3eb;
+  color: var(--foreground);
 }
 .mm-workbench-body {
-  padding: 30px 24px 24px;
+  padding: 20px;
 }
 .mm-terminal-heading {
   font-weight: 500;
@@ -261,7 +235,7 @@
   margin: 0 0 8px;
 }
 .mm-terminal-description {
-  color: #acadb9;
+  color: var(--muted-foreground);
   font-size: 13px;
   max-width: 34ch;
   margin: 0 0 24px;
@@ -278,7 +252,7 @@
   padding-left: 14px;
   background: var(--mm-panel);
   border: 1px solid var(--mm-line);
-  border-radius: 9px;
+  border-radius: 12px;
   min-width: 0;
 }
 .mm-command pre {
@@ -332,18 +306,18 @@
   color: var(--mm-muted);
 }
 .mm-workbench .mm-command {
-  --mm-panel: #14151a;
-  --mm-line: #3b3c47;
-  --mm-muted: #a5a7b6;
-  --mm-soft: #2a2c36;
-  --mm-ink: #fff;
-  --mm-blue: #b2c0ff;
+  --mm-panel: var(--card);
+  --mm-line: var(--border);
+  --mm-muted: var(--muted-foreground);
+  --mm-soft: var(--secondary);
+  --mm-ink: var(--foreground);
+  --mm-blue: var(--signal);
 }
 .mm-workbench .mm-command pre {
   font-size: 12px;
 }
 .mm-workbench .mm-copy-status {
-  color: #acadb9;
+  color: var(--muted-foreground);
 }
 .mm-terminal-next {
   display: flex;
@@ -353,12 +327,12 @@
   font-size: 12px;
 }
 .mm-terminal-next span {
-  color: #acadb9;
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 .mm-terminal-next code {
   font-size: 12px;
-  color: #e2e4f0;
+  color: var(--foreground);
 }
 .mm-workbench-body > a {
   display: inline-flex;
@@ -366,7 +340,7 @@
   gap: 10px;
   min-height: 44px;
   font-size: 12px;
-  color: #becaff;
+  color: var(--signal);
 }
 .mm-workspace-strip {
   display: flex;
@@ -374,8 +348,8 @@
   align-items: center;
   padding: 16px 22px;
   font-size: 11px;
-  border-top: 1px solid #35363e;
-  color: #b1b3c1;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
 }
 .mm-workspace-strip > span:last-child {
   margin-left: auto;
@@ -399,7 +373,7 @@
   font-weight: 500;
 }
 .mm-workflow-section {
-  padding: 84px 0 72px;
+  padding: 64px 0 56px;
   background: var(--mm-panel);
   border-block: 1px solid var(--mm-line);
 }
@@ -704,7 +678,7 @@
   gap: 3px;
   border: 1px solid var(--mm-line);
   background: var(--mm-soft);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 3px;
   margin-block: 8px 0;
   max-width: 100%;
@@ -783,7 +757,7 @@
 .mm-callout {
   border: 1px solid var(--mm-line);
   background: var(--mm-soft);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 16px 18px;
   margin-block: 20px;
   font-size: 13px;
@@ -805,7 +779,7 @@
   min-height: 48px;
   padding: 11px 14px;
   border: 1px solid var(--mm-line);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--mm-panel);
   font-family: var(--font-geist-mono), monospace;
   font-size: 13px;
@@ -815,7 +789,7 @@
   color: var(--mm-muted);
 }
 .mm-machine-input[aria-invalid="true"] {
-  border-color: #b84040;
+  border-color: var(--destructive);
 }
 .mm-step-content .mm-field-hint {
   font-size: 12px;
@@ -878,11 +852,11 @@
 .mm-dashboard-guide {
   --mm-bg: var(--background);
   --mm-ink: var(--foreground);
-  --mm-muted: #a4a5b1;
-  --mm-line: #373840;
-  --mm-panel: #202127;
-  --mm-soft: #272830;
-  --mm-blue: #b1bfff;
+  --mm-muted: var(--muted-foreground);
+  --mm-line: var(--border);
+  --mm-panel: var(--card);
+  --mm-soft: var(--secondary);
+  --mm-blue: var(--signal);
   max-width: 1080px;
   margin: auto;
   padding: 24px 16px 80px;
@@ -906,37 +880,6 @@
 .mm-dashboard-guide .mm-guide-heading h1 {
   font-size: 44px;
 }
-@media (prefers-color-scheme: dark) {
-  .mm-site {
-    --mm-bg: #16171b;
-    --mm-ink: #f0f0f5;
-    --mm-muted: #a5a6b4;
-    --mm-line: #363740;
-    --mm-panel: #1c1d23;
-    --mm-soft: #24252d;
-    --mm-blue: #b1bfff;
-  }
-  .mm-header-inner nav .mm-header-dashboard {
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 7%);
-  }
-  .mm-gloss-primary {
-    color: #24252d;
-    border-color: #c3c5d1;
-    background: linear-gradient(180deg, #fff, #d9dce8);
-    box-shadow:
-      inset 0 1px 0 #fff,
-      0 2px 4px rgb(0 0 0 / 20%);
-    text-shadow: 0 1px 0 #fff;
-  }
-  .mm-gloss-secondary {
-    color: #ececf4;
-    border-color: #444650;
-    background: linear-gradient(180deg, #363842, #272932);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 10%),
-      0 1px 2px rgb(0 0 0 / 15%);
-  }
-}
 @media (max-width: 1000px) {
   .mm-hero {
     gap: 36px;
@@ -957,7 +900,7 @@
 }
 @media (max-width: 760px) {
   .mm-container {
-    width: min(100% - 40px, 600px);
+    width: min(100% - 32px, 600px);
   }
   .mm-header-inner {
     min-height: 72px;
@@ -999,7 +942,7 @@
     width: 100%;
   }
   .mm-workbench-body {
-    padding: 26px 22px;
+    padding: 20px 16px;
   }
   .mm-workbench .mm-command pre {
     font-size: 12px;
@@ -1034,7 +977,7 @@
   .mm-details-section {
     grid-template-columns: minmax(0, 1fr);
     gap: 40px;
-    padding-block: 64px;
+    padding-block: 48px;
   }
   .mm-faq-section {
     grid-template-columns: minmax(0, 1fr);
@@ -1173,5 +1116,142 @@
   }
   .mm-segmented input:checked + span {
     outline: 2px solid Highlight;
+  }
+}
+
+/* Astryx foundations: warm canvas, cobalt identity and quiet, rounded controls. */
+.mm-header-inner {
+  min-height: 72px;
+}
+.mm-header-inner nav .mm-header-dashboard {
+  border: 0;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.mm-header-inner nav .mm-header-dashboard:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  filter: brightness(0.92);
+}
+.mm-hero {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 44px;
+  padding-top: clamp(48px, 6vw, 80px);
+}
+.mm-hero-copy {
+  text-align: center;
+  max-width: 800px;
+  margin-inline: auto;
+}
+.mm-hero-lockup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 32px;
+  color: var(--brand);
+  font-size: clamp(40px, 6vw, 76px);
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+}
+.mm-hero-lockup svg {
+  width: 88px;
+  height: 58px;
+  flex-shrink: 0;
+}
+.mm-intro {
+  justify-content: center;
+}
+.mm-hero h1 {
+  font-size: clamp(38px, 4.5vw, 56px);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+}
+.mm-hero h1 > span {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.mm-hero .mm-lead {
+  margin: 24px auto 28px;
+  max-width: 54ch;
+}
+.mm-hero .mm-actions {
+  justify-content: center;
+}
+.mm-gloss {
+  border-radius: 999px;
+  padding-inline: 24px;
+  min-width: 166px;
+  font-weight: 500;
+  box-shadow: none;
+  text-shadow: none;
+}
+.mm-workbench {
+  width: min(100%, 660px);
+  margin-inline: auto;
+  border-radius: 16px;
+}
+.mm-workbench .mm-command {
+  background: var(--background);
+}
+.mm-workspace-strip {
+  color: var(--muted-foreground);
+}
+.mm-terminal-description {
+  max-width: none;
+}
+.mm-hero-bottom {
+  margin-top: 0;
+}
+@media (max-width: 760px) {
+  .mm-header-inner {
+    flex-wrap: wrap;
+    padding-block: 10px;
+    gap: 4px;
+  }
+  .mm-header-inner nav {
+    gap: 2px;
+  }
+  .mm-hero-lockup {
+    gap: 12px;
+    font-size: clamp(32px, 7.5vw, 54px);
+    margin-bottom: 28px;
+  }
+  .mm-hero-lockup svg {
+    width: 50px;
+    height: 34px;
+  }
+  .mm-hero h1 {
+    font-size: clamp(36px, 9vw, 48px);
+  }
+  .mm-hero {
+    padding-top: 56px;
+    gap: 36px;
+  }
+  .mm-hero .mm-lead {
+    font-size: 16px;
+  }
+  .mm-gloss {
+    min-width: 144px;
+    padding-inline: 18px;
+  }
+  .mm-header-inner .mm-brand-mark {
+    width: 27px;
+    height: 20px;
+  }
+}
+@media (max-width: 440px) {
+  .mm-header-inner {
+    justify-content: center;
+  }
+  .mm-header-inner .mm-wordmark {
+    margin-right: auto;
+  }
+  .mm-header-inner nav {
+    justify-content: space-between;
+    width: 100%;
   }
 }
