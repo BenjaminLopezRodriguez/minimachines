@@ -2,13 +2,16 @@
 import { execFileSync, spawn } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 
 import { CODE_MODEL, codeCommand } from "./code.js";
@@ -75,6 +78,7 @@ function usage(exitCode = 1): never {
   minimachines people [--json] [--project <name>]          people on this repo's project
   minimachines people + <row|email|+phone|agent:<id>>... [--view] [--note <text>] [--yes]
   minimachines people - <row|email|+phone>...              revoke an invite / remove a member
+  minimachines view [<url>|<port>|<machineId>]             open a dev app in the desktop viewer (default :3000)
   minimachines tui [--json] [--test]                       dashboard: machines, shares, people (? for keys)
   minimachines code [--machine <id>] [-p <prompt>] [--yes]  coding agent (needs ANTHROPIC_API_KEY)
   mm run <machineId>
@@ -561,6 +565,66 @@ async function currentProjectId(): Promise<string | undefined> {
   return projects.find((p) => p.repoKey === key && p.role !== "viewer")?.id;
 }
 
+// --- view: open a dev app in the desktop viewer -----------------------------
+
+/** `3000` / `:3000` → localhost, `vm_…` → that machine's app URL, else a URL as given. */
+async function viewTarget(target?: string): Promise<string> {
+  const t = target?.trim() || "3000";
+  if (/^:?\d{2,5}$/.test(t)) return `http://localhost:${t.replace(":", "")}`;
+  if (/^vm_[\w-]+$/.test(t)) {
+    const { machine } = (await (await api("GET", mpath(t))).json()) as { machine: Machine & { appUrl?: string } };
+    if (!machine.appUrl) {
+      console.error(`${t} has no app URL yet. Start its dev server on port 3000, or pass a URL.`);
+      process.exit(1);
+    }
+    return machine.appUrl;
+  }
+  const url = /^[a-z]+:\/\//i.test(t) ? t : `http://${t}`;
+  try {
+    if (!["http:", "https:"].includes(new URL(url).protocol)) throw new Error();
+  } catch {
+    console.error(`Not a URL, port or machine id: ${t}`);
+    process.exit(1);
+  }
+  return url;
+}
+
+/** The viewer to launch: $MM_VIEWER, the installed app, or this repo's packages/viewer in dev. */
+function findViewer(): { cmd: string; args: string[] } | null {
+  const env = process.env.MM_VIEWER?.trim();
+  if (env) return { cmd: env, args: [] };
+  const name = "minimachines viewer";
+  const installed =
+    platform() === "darwin"
+      ? [`/Applications/${name}.app/Contents/MacOS/${name}`, join(homedir(), `Applications/${name}.app/Contents/MacOS/${name}`)]
+      : platform() === "win32"
+        ? [join(process.env.LOCALAPPDATA ?? "", "Programs", name, `${name}.exe`)]
+        : ["/usr/bin/mm-viewer", "/opt/minimachines viewer/mm-viewer"];
+  const hit = installed.find((p) => existsSync(p));
+  if (hit) return { cmd: hit, args: [] };
+  // Dev checkout: packages/cli/dist → packages/viewer, run through its electron.
+  const dir = fileURLToPath(new URL("../../viewer/", import.meta.url));
+  try {
+    const electron = createRequire(join(dir, "package.json"))("electron") as unknown as string;
+    return { cmd: electron, args: [dir] };
+  } catch {
+    return null;
+  }
+}
+
+async function view(target?: string) {
+  const url = await viewTarget(target);
+  const viewer = findViewer();
+  if (!viewer) {
+    console.log(`${url}\n(viewer not installed — opening your browser; install it from packages/viewer: pnpm dist)`);
+    await openUrl(url);
+    return;
+  }
+  // Detached: the window outlives this command; a second `mm view` reuses it.
+  spawn(viewer.cmd, [...viewer.args, `--url=${url}`], { detached: true, stdio: "ignore" }).unref();
+  console.log(`viewing ${url}`);
+}
+
 const mpath = (id: string, tail = "") =>
   `/api/v1/machines/${encodeURIComponent(id)}${tail}`;
 
@@ -859,6 +923,10 @@ async function main() {
     return out;
   })();
 
+  if (cmd === "view") {
+    await view(positional[1]);
+    return;
+  }
   if (cmd === "people") {
     await peopleCommand(args.slice(1), { api, openUrl });
     return;
@@ -1013,7 +1081,7 @@ async function main() {
   // user on an older CLI learns to upgrade instead of re-reading usage.
   const known = [
     "run", "agent", "login", "logout", "whoami", "pager", "share",
-    "create", "exec", "put", "ask", "say", "stop", "skill", "people", "code", "tui",
+    "create", "exec", "put", "ask", "say", "stop", "skill", "people", "code", "tui", "view",
   ];
   if (cmd && !known.includes(cmd)) {
     console.error(

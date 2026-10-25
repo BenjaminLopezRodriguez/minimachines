@@ -162,6 +162,7 @@ exposed; port 3000 is the one surfaced as `appUrl`.
 | `mm people --json` | Members, pending invites and git authors of this repo's project |
 | `mm people + <row\|email\|+phone\|agent:<id>> [--view] --yes` | Invite — only after a human says yes (see below) |
 | `mm code [--machine <id>] [-p "<task>"]` | Interactive coding agent (needs `ANTHROPIC_API_KEY`) |
+| `mm view [<url>\|<port>\|<machineId>]` | Open a dev app in a desktop window on the user's computer (reuses one window) |
 
 Reach for raw HTTP only for what the CLI doesn't cover (list machines,
 templates/recommend). Same host, Bearer `mm_…`, owner-scoped.
@@ -192,6 +193,11 @@ Templates include `node-ts`, `python`, `agent-shell`, `claude-devbox`,
 ## Share the result
 
 - `appUrl` is already public — hand it over.
+- To put it on the user's screen, run `mm --no-tui view <machineId>` (or a URL
+  or local port). It opens the minimachines viewer, a single desktop window,
+  and a second call reuses that window. Tell the user a window opened, since
+  this appears on their computer. Without the viewer installed it falls back to
+  their browser.
 - Branded, ownable link:
   ```bash
   mm share create --machine <id> --port 3000 --web
