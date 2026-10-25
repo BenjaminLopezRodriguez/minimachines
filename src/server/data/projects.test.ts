@@ -51,7 +51,7 @@ void test("a forwarded link alone cannot be accepted; link + code can, once", as
     reason: "code_required",
   });
   const issued = await issueJoinCode(token);
-  assert.ok(issued);
+  assert.ok(issued.ok);
   assert.deepEqual(await acceptInvite({ token, userId: joiner, code: issued.code }), {
     ok: true,
     projectId: project.id,
@@ -65,7 +65,7 @@ void test("a forwarded link alone cannot be accepted; link + code can, once", as
 void test("wrong codes are capped", async () => {
   const { token } = await invite(uid());
   const issued = await issueJoinCode(token);
-  assert.ok(issued);
+  assert.ok(issued.ok);
   const wrong = issued.code === "000000" ? "111111" : "000000";
   for (let i = 0; i < 5; i++) {
     assert.equal((await acceptInvite({ token, userId: uid(), code: wrong })).ok, false);
@@ -146,4 +146,28 @@ void test("members read+write, viewers and agent keys read only, strangers nothi
   assert.equal(await can(stranger, "read"), false);
   assert.equal((await listMachines({ ownerUserId: viewer })).length, 1);
   assert.equal((await listMachines({ ownerUserId: stranger })).length, 0);
+});
+
+void test("repos may share a name; named projects stay unique per owner", async () => {
+  const owner = uid();
+  const a = await upsertProject({ ownerUserId: owner, name: "app", repoKey: repo() });
+  const b = await upsertProject({ ownerUserId: owner, name: "app", repoKey: repo() });
+  assert.notEqual(a.id, b.id);
+  const named = await upsertProject({ ownerUserId: owner, name: "app" });
+  assert.equal((await upsertProject({ ownerUserId: owner, name: "app" })).id, named.id);
+  assert.notEqual(named.id, a.id);
+});
+
+void test("join codes: one per minute, five per invite", async () => {
+  const { token, invite: row } = await invite(uid());
+  assert.equal((await issueJoinCode(token)).ok, true);
+  assert.deepEqual(await issueJoinCode(token), { ok: false, reason: "cooldown" });
+  // Simulate the minute passing and the cap being nearly used.
+  const { db } = await import("~/server/db");
+  const { projectInvites } = await import("~/server/db/schema");
+  const { eq } = await import("drizzle-orm");
+  await db.update(projectInvites).set({ codeSentAt: new Date(Date.now() - 120_000), codesSent: 4 }).where(eq(projectInvites.id, row.id));
+  assert.equal((await issueJoinCode(token)).ok, true);
+  await db.update(projectInvites).set({ codeSentAt: new Date(Date.now() - 120_000) }).where(eq(projectInvites.id, row.id));
+  assert.deepEqual(await issueJoinCode(token), { ok: false, reason: "limit" });
 });

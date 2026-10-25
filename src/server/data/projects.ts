@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
 
-import { and, count, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 
 import { db } from "~/server/db";
 import { projectInvites, projectMembers, projects } from "~/server/db/schema";
@@ -8,6 +8,8 @@ import { projectInvites, projectMembers, projects } from "~/server/db/schema";
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_CODE_TRIES = 5;
+const MAX_CODES_PER_INVITE = 5;
+const CODE_COOLDOWN_MS = 60 * 1000;
 const MAX_INVITES_PER_DAY = 20;
 const MAX_PENDING_PER_PROJECT = 50;
 
@@ -41,14 +43,21 @@ export async function upsertProject(input: {
     .where(and(eq(projects.ownerUserId, input.ownerUserId), match))
     .limit(1);
   if (!row) {
-    [row] = await db
+    // Race-safe: a concurrent create hits the unique index, so re-read instead of failing.
+    await db
       .insert(projects)
       .values({
         ownerUserId: input.ownerUserId,
         name: input.name,
         repoKey: input.repoKey ?? null,
       })
-      .returning();
+      .onConflictDoNothing();
+    [row] = await db
+      .select()
+      .from(projects)
+      .where(and(eq(projects.ownerUserId, input.ownerUserId), match))
+      .orderBy(projects.createdAt)
+      .limit(1);
     if (!row) throw new Error("Failed to create project");
   }
   await db
@@ -219,23 +228,40 @@ export async function resolveInvite(
   return row && isLive(row.invite) ? row : null;
 }
 
-/** Mint a fresh 6-digit join code for the invite's own contact. Returns it for delivery. */
+/**
+ * Mint a fresh 6-digit join code for the invite's own contact. At most
+ * MAX_CODES_PER_INVITE per invite, one per minute — so re-sending can't be
+ * used to reset the guess counter forever or to flood the invitee.
+ */
 export async function issueJoinCode(
   token: string,
-): Promise<{ code: string; invite: InviteRow } | null> {
+): Promise<{ ok: true; code: string; invite: InviteRow } | { ok: false; reason: "invalid" | "cooldown" | "limit" }> {
   const found = await resolveInvite(token);
-  if (!found?.invite.codeRequired) return null;
+  if (!found?.invite.codeRequired) return { ok: false, reason: "invalid" };
+  const inv = found.invite;
+  if (inv.codesSent >= MAX_CODES_PER_INVITE) return { ok: false, reason: "limit" };
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  const now = new Date();
+  // One conditional UPDATE so two concurrent requests can't both pass the limits.
   const [invite] = await db
     .update(projectInvites)
     .set({
-      codeHash: hash(`${found.invite.id}:${code}`),
-      codeExpiresAt: new Date(Date.now() + CODE_TTL_MS),
+      codeHash: hash(`${inv.id}:${code}`),
+      codeExpiresAt: new Date(now.getTime() + CODE_TTL_MS),
       codeTries: 0,
+      codesSent: sql`${projectInvites.codesSent} + 1`,
+      codeSentAt: now,
     })
-    .where(eq(projectInvites.id, found.invite.id))
+    .where(
+      and(
+        eq(projectInvites.id, inv.id),
+        lt(projectInvites.codesSent, MAX_CODES_PER_INVITE),
+        or(isNull(projectInvites.codeSentAt), lt(projectInvites.codeSentAt, new Date(now.getTime() - CODE_COOLDOWN_MS))),
+      ),
+    )
     .returning();
-  return invite ? { code, invite } : null;
+  if (invite) return { ok: true, code, invite };
+  return { ok: false, reason: inv.codesSent + 1 >= MAX_CODES_PER_INVITE ? "limit" : "cooldown" };
 }
 
 export type AcceptResult =
@@ -260,10 +286,11 @@ export async function acceptInvite(input: {
     if (invite.codeTries >= MAX_CODE_TRIES) return { ok: false, reason: "too_many_tries" };
     const expired = !invite.codeExpiresAt || invite.codeExpiresAt.getTime() < Date.now();
     if (expired || hash(`${invite.id}:${input.code.trim()}`) !== invite.codeHash) {
+      // Atomic increment: parallel guesses can't slip past the cap.
       await db
         .update(projectInvites)
-        .set({ codeTries: invite.codeTries + 1 })
-        .where(eq(projectInvites.id, invite.id));
+        .set({ codeTries: sql`${projectInvites.codeTries} + 1` })
+        .where(and(eq(projectInvites.id, invite.id), lt(projectInvites.codeTries, MAX_CODE_TRIES)));
       return { ok: false, reason: "bad_code" };
     }
   }
@@ -271,7 +298,14 @@ export async function acceptInvite(input: {
   const [won] = await db
     .update(projectInvites)
     .set({ acceptedAt: new Date(), acceptedBy: input.userId })
-    .where(and(eq(projectInvites.id, invite.id), isNull(projectInvites.acceptedAt)))
+    .where(
+      and(
+        eq(projectInvites.id, invite.id),
+        isNull(projectInvites.acceptedAt),
+        // Re-checked in the same statement as the accept, so a racing guess burst can't win after the cap.
+        ...(invite.codeRequired ? [lt(projectInvites.codeTries, MAX_CODE_TRIES)] : []),
+      ),
+    )
     .returning({ id: projectInvites.id });
   if (!won) return { ok: false, reason: "invalid" };
 

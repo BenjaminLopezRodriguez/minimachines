@@ -12,6 +12,8 @@ const ERROR_COPY: Record<string, string> = {
   code_required: "Enter the code we sent you.",
   send_failed: "We couldn't send a code. Ask the person who invited you to send a new invite.",
   invalid: "This invite is no longer valid.",
+  code_cooldown: "A code was just sent. Wait a minute before asking for another.",
+  code_limit: "Too many codes were sent for this invite. Ask for a new invite.",
 };
 
 /** a***@acme.dev / +1•••••0123 — enough to recognise, not enough to harvest. */
@@ -29,7 +31,8 @@ async function sendCodeAction(formData: FormData) {
   const { user } = await withAuth();
   if (!user?.id) redirect(`/join/${token}`);
   const issued = await issueJoinCode(token);
-  const sent = issued ? await deliverCode(issued.invite, issued.code).catch(() => false) : false;
+  if (!issued.ok) redirect(`/join/${token}?error=${issued.reason === "invalid" ? "send_failed" : `code_${issued.reason}`}`);
+  const sent = await deliverCode(issued.invite, issued.code).catch(() => false);
   redirect(`/join/${token}?${sent ? "sent=1" : "error=send_failed"}`);
 }
 

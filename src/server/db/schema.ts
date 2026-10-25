@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, pgTableCreator, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
 
 /**
@@ -358,7 +359,8 @@ export const projects = createTable(
   }),
   (t) => [
     uniqueIndex("project_owner_repo_idx").on(t.ownerUserId, t.repoKey),
-    uniqueIndex("project_owner_name_idx").on(t.ownerUserId, t.name),
+    // Names repeat across repos (two repos called "app"); only repo-less projects are unique by name.
+    uniqueIndex("project_owner_named_idx").on(t.ownerUserId, t.name).where(sql`"repoKey" IS NULL`),
   ],
 );
 
@@ -403,6 +405,9 @@ export const projectInvites = createTable(
     codeHash: d.varchar({ length: 64 }),
     codeExpiresAt: d.timestamp({ withTimezone: true }),
     codeTries: d.integer().notNull().default(0),
+    /** Codes sent for this invite, and when the last went out — caps re-sends. */
+    codesSent: d.integer().notNull().default(0),
+    codeSentAt: d.timestamp({ withTimezone: true }),
     invitedBy: d.varchar({ length: 128 }).notNull(),
     expiresAt: d.timestamp({ withTimezone: true }).notNull(),
     acceptedAt: d.timestamp({ withTimezone: true }),
