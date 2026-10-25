@@ -181,7 +181,7 @@ export async function peopleCommand(
     if (p.pending.length) {
       console.log("  PENDING");
       for (const x of p.pending)
-        console.log(`     ${x.contact.padEnd(49)} ${x.channel === "email" ? "emailed" : "texted"} ${ago(x.createdAt)} · ${x.role}`);
+        console.log(`     ${x.contact.padEnd(49)} ${x.channel === "email" ? "email" : "text"} invite · ${ago(x.createdAt)} · ${x.role}`);
     }
     if (authors.length) {
       console.log("  FROM GIT (12 mo)");
