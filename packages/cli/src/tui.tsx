@@ -145,11 +145,12 @@ function originKey(): string | null {
   }
 }
 
-async function repoProject(api: Api): Promise<{ id: string; name: string } | null> {
+/** This folder's project: by git origin, else by folder name (as `mm people` creates it). id "" = none yet. */
+async function repoProject(api: Api): Promise<{ id: string; name: string }> {
   const key = originKey();
-  if (!key) return null;
+  const name = key ? basename(key) : basename(process.cwd());
   const { projects } = (await (await api("GET", "/api/v1/projects")).json()) as { projects: { id: string; name: string; repoKey: string | null }[] };
-  return projects.find((p) => p.repoKey === key) ?? { id: "", name: basename(key) };
+  return projects.find((p) => (key ? p.repoKey === key : p.name === name && !p.repoKey)) ?? { id: "", name };
 }
 
 function machineBadge(status: string): Badge {
@@ -198,7 +199,7 @@ export async function load(api: Api, tab: Tab): Promise<{ items: Item[]; project
   for (const a of gitAuthors()) if (!known.has(a.email)) people.push({ kind: "git", id: a.email, name: a.name, contact: a.usable ? a.email : "", commits: a.commits });
   return {
     projectId: project?.id || undefined,
-    note: !project ? "not in a git repo — use mm people --project <name>" : !project.id ? `no project for ${project.name} yet — press + to invite someone and create it` : undefined,
+    note: !project.id ? `no project for ${project.name} yet — press + to invite someone and create it` : undefined,
     items: people.map((x) => ({
       key: `${x.kind}:${x.id}`,
       title: x.name,
@@ -540,9 +541,9 @@ function App({ deps, exit, startView }: { deps: TuiDeps; exit: (after?: () => Pr
 }
 
 async function createProject(api: Api): Promise<string> {
-  const repoKey = originKey();
-  if (!repoKey) throw new Error("not a git repo with an origin remote");
-  const { project } = (await (await api("PUT", "/api/v1/projects", { name: basename(repoKey), repoKey })).json()) as { project: { id: string } };
+  const repoKey = originKey() ?? undefined;
+  const name = repoKey ? basename(repoKey) : basename(process.cwd());
+  const { project } = (await (await api("PUT", "/api/v1/projects", { name, repoKey })).json()) as { project: { id: string } };
   return project.id;
 }
 
