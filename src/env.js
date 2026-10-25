@@ -22,6 +22,19 @@ export const env = createEnv({
     // Agent Pager (v1, email-first). Unset → pager notify is a no-op that logs.
     RESEND_API_KEY: z.string().optional(),
     PAGER_FROM_EMAIL: z.string().optional(),
+    // Project invites. Email falls back to PAGER_FROM_EMAIL; Twilio unset →
+    // text invites are handed back to the CLI to send from Messages.
+    INVITE_FROM_EMAIL: z.string().optional(),
+    TWILIO_ACCOUNT_SID: z.string().optional(),
+    TWILIO_AUTH_TOKEN: z.string().optional(),
+    TWILIO_MESSAGING_SERVICE_SID: z.string().optional(),
+    // Vercel Blob (private store) for whiteboard images and binary project files.
+    // Either a read-write token, or a store id with OIDC on Vercel. Unset → binaries stay local.
+    BLOB_READ_WRITE_TOKEN: z.string().optional(),
+    BLOB_STORE_ID: z.string().optional(),
+    // Live project rooms (packages/sync). Unset → collaboration is off.
+    SYNC_URL: z.string().url().optional(),
+    SYNC_SECRET: z.string().min(32).optional(),
     // Public origin used for reply links and injected into sandboxes.
     APP_BASE_URL: z.string().url().optional(),
     // Web Push (VAPID). Unset → push is a no-op; email still works.
@@ -50,7 +63,15 @@ export const env = createEnv({
     MODAL_TOKEN_SECRET: process.env.MODAL_TOKEN_SECRET,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     PAGER_FROM_EMAIL: process.env.PAGER_FROM_EMAIL,
+    INVITE_FROM_EMAIL: process.env.INVITE_FROM_EMAIL,
+    TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
+    TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
+    TWILIO_MESSAGING_SERVICE_SID: process.env.TWILIO_MESSAGING_SERVICE_SID,
     APP_BASE_URL: process.env.APP_BASE_URL,
+    BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
+    BLOB_STORE_ID: process.env.BLOB_STORE_ID,
+    SYNC_URL: process.env.SYNC_URL,
+    SYNC_SECRET: process.env.SYNC_SECRET,
     VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
     VAPID_SUBJECT: process.env.VAPID_SUBJECT,
     NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,

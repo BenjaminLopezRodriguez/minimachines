@@ -3,6 +3,7 @@ import type { GitRequest } from "~/lib/git";
 import { db } from "~/server/db";
 import { machines } from "~/server/db/schema";
 import { gitWorker } from "~/server/git/worker";
+import { machineAccess } from "./machine-store";
 import { execSandbox, modalEnabled } from "./modal-driver";
 
 const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
@@ -16,7 +17,7 @@ export async function machineGit<T = { message: string }>(
   const [machine] = await db
     .select({ status: machines.status, sandboxId: machines.sandboxId })
     .from(machines)
-    .where(and(eq(machines.id, id), eq(machines.ownerUserId, ownerUserId)))
+    .where(and(eq(machines.id, id), machineAccess(ownerUserId)))
     .limit(1);
   if (!machine) throw new Error("Machine not found");
   if (machine.status !== "running")

@@ -60,3 +60,31 @@ void test("maps API errors to MinimachineError", async () => {
     },
   );
 });
+
+void test("repoKeyFromRemote normalizes ssh and https remotes", async () => {
+  const { repoKeyFromRemote } = await import("./client.js");
+  assert.equal(repoKeyFromRemote("git@github.com:Acme/App.git"), "github.com/acme/app");
+  assert.equal(repoKeyFromRemote("https://github.com/acme/app"), "github.com/acme/app");
+  assert.equal(repoKeyFromRemote("https://tok@gitlab.com/g/sub/repo.git/"), "gitlab.com/g/sub/repo");
+  assert.equal(repoKeyFromRemote("ssh://git@host.dev:2222/team/x.git"), "host.dev/team/x");
+  assert.equal(repoKeyFromRemote("/local/path"), null);
+});
+
+void test("projects.invite posts contacts and returns results", async () => {
+  let body: unknown;
+  const mm = new Minimachine({
+    apiKey: "mm_test",
+    baseUrl: "https://example.test",
+    fetch: async (input, init) => {
+      assert.equal(String(input), "https://example.test/api/v1/projects/p1/invites");
+      body = JSON.parse(String(init?.body));
+      return new Response(
+        JSON.stringify({ invites: [{ contact: "ana@acme.dev", status: "sent" }] }),
+        { status: 201 },
+      );
+    },
+  });
+  const out = await mm.projects.invite("p1", { contacts: [{ email: "ana@acme.dev" }], role: "viewer" });
+  assert.deepEqual(body, { contacts: [{ email: "ana@acme.dev" }], role: "viewer" });
+  assert.equal(out[0]?.status, "sent");
+});

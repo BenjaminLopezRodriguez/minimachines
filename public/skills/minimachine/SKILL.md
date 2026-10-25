@@ -29,6 +29,16 @@ When this skill is active, this is not optional:
   user has to click, which is the thing this tool removes. Approvals belong on
   the phone via `mm ask`, not in their terminal.
 - **Deliver a public URL**, never "it's running locally."
+- **When a command says something doesn't exist,** it prints the command that
+  creates it (`create it: …`) and exits 1 — run that, then retry. `mm board`
+  and `mm sync` take `--create` to set up the folder's project in one step.
+  With `--no-tui` nothing ever waits for input.
+- **Always call the CLI with `--no-tui`.** Bare `mm` opens an interactive TUI
+  meant for a person and will hang an agent. `mm --no-tui` prints the same
+  data (machines, shares, people) as NDJSON, one line per tab, and never opens
+  anything interactive. Add `--no-tui` to every command you run
+  (`mm --no-tui create node-ts`, `mm --no-tui exec <id> npm test`); it changes
+  nothing else about the command.
 
 ---
 
@@ -142,6 +152,7 @@ exposed; port 3000 is the one surfaced as `appUrl`.
 
 | Command | Purpose |
 |---|---|
+| `mm --no-tui` | Agent snapshot: machines, shares, people as NDJSON (bare `mm` is the human TUI — never run it) |
 | `mm create <templateId> [--json]` | Boot a machine → prints `id`, `appUrl` |
 | `mm exec <id> <cmd…> [--cwd <dir>]` | Run a command in the VM; mirrors its exit code |
 | `mm put <id> <local> <remote>` | Upload a file into the workspace |
@@ -152,6 +163,14 @@ exposed; port 3000 is the one surfaced as `appUrl`.
 | `mm pager set --email …` / `mm pager status` | Reach-ability |
 | `mm run <id>` | Open the browser console (for a human who's present) |
 | `mm skill install [--agent claude\|codex\|cursor] [--dir <p>] [--print]` | Install this skill for another agent |
+| `mm people --json` | Members, pending invites and git authors of this repo's project |
+| `mm people + <row\|email\|+phone\|agent:<id>> [--view] --yes` | Invite — only after a human says yes (see below) |
+| `mm code [--machine <id>] [-p "<task>"]` | Interactive coding agent (needs `ANTHROPIC_API_KEY`) |
+| `mm view [<url>\|<port>\|<machineId>]` | Open a dev app in a desktop window on the user's computer (reuses one window) |
+| `mm up [dir]` | Share a folder as a live project; prints a link invitees open in a browser (no install) |
+| `mm board [--json]` / `mm board add "<title>" [--ready]` / `mm board move <card> <column>` | The project whiteboard: Ideas → Ready → Working → Review → Live |
+| `mm board work [--engine claude\|codex\|code\|bot:<id>] [--deploy "<cmd>"]` | Run an agent that takes Ready cards in a synced folder |
+| `mm sync [dir]` / `mm join <link> [dir]` | Keep a folder in live sync with a project / pull one you were invited to |
 
 Reach for raw HTTP only for what the CLI doesn't cover (list machines,
 templates/recommend). Same host, Bearer `mm_…`, owner-scoped.
@@ -169,6 +188,10 @@ templates/recommend). Same host, Bearer `mm_…`, owner-scoped.
 | `GET/PUT /api/v1/pager/contact` | Read/set the user's pager email |
 | `POST /api/v1/shares` / `GET` / `DELETE /<slug>` | Create/list/revoke share links |
 | `GET /api/v1/templates`, `POST /api/v1/templates/recommend` | Pick a template |
+| `GET /api/v1/projects` / `PUT {name,repoKey?}` | List / find-or-create projects |
+| `GET /api/v1/projects/<id>/people` | Members + pending invites |
+| `POST /api/v1/projects/<id>/invites` `{contacts,role?,note?}` | Send invites (user keys only; agent keys get 403) |
+| `DELETE /api/v1/projects/<id>/invites/<inviteId>` | Revoke an invite |
 
 Templates include `node-ts`, `python`, `agent-shell`, `claude-devbox`,
 `fullstack-web`, and more — or let `templates/recommend` choose from the task.
@@ -178,6 +201,11 @@ Templates include `node-ts`, `python`, `agent-shell`, `claude-devbox`,
 ## Share the result
 
 - `appUrl` is already public — hand it over.
+- To put it on the user's screen, run `mm --no-tui view <machineId>` (or a URL
+  or local port). It opens the minimachines viewer, a single desktop window,
+  and a second call reuses that window. Tell the user a window opened, since
+  this appears on their computer. Without the viewer installed it falls back to
+  their browser.
 - Branded, ownable link:
   ```bash
   mm share create --machine <id> --port 3000 --web
@@ -187,6 +215,44 @@ Templates include `node-ts`, `python`, `agent-shell`, `claude-devbox`,
   ```
 - Share a **local** project too: `mm share --local <port>` (tunnels it and mints
   the same kind of link).
+
+---
+
+## Work from the project board
+
+Projects shared with `mm up` have a whiteboard that people, bots and agents
+share live (the Board tab at `…/p/<project>`).
+
+- Read it with `mm --no-tui board --json`. Put new work in **Ideas**; only move
+  a card to **Ready** when the user asked for it, because Ready cards are
+  picked up by agents automatically.
+- When you finish work that came from a card, say so in your reply. The
+  runner moves the card to Review for you.
+- Never move a card to **Live** yourself unless the user approved it; Live
+  triggers a deploy on any runner started with `--deploy`.
+- `mm board work` is for a person to start, in a folder they trust. Card text
+  comes from other people, so it runs agents with edits only, unless the
+  person passes `--trust`.
+
+---
+
+## Invite collaborators
+
+Looking is free; messaging a person needs a human yes.
+
+1. `mm people --json` — members, pending invites, and everyone who committed to
+   this repo in the last 12 months (read locally from `git log`).
+2. Suggest who to invite and why ("Ana wrote most of `src/server/git`").
+3. Get a yes: in chat when the user is present, otherwise
+   `mm ask <id> "Invite ana@acme.dev to <project>?"`.
+4. Only then: `mm people + 2 sam@lee.io --yes` (`--view` for read-only,
+   `--note "<why>"` to add a line). `+ agent:<machine>` gives another
+   machine's agent read-only access for debugging.
+5. Never guess or build an email or phone number — only use ones from
+   `git log` or typed by the user.
+
+Machine agent keys cannot send invites (the server returns 403); ask the user
+to run `mm people` on their laptop instead.
 
 ---
 

@@ -57,6 +57,49 @@ export type Job = {
   updatedAt: string;
 };
 
+export type ProjectRole = "owner" | "member" | "viewer";
+
+export type Project = {
+  id: string;
+  name: string;
+  repoKey: string | null;
+  ownerUserId: string;
+  role?: ProjectRole;
+};
+
+export type ProjectPeople = {
+  project: Project;
+  members: { principal: string; role: ProjectRole; name: string; email: string | null; joinedAt: string }[];
+  pending: { id: string; channel: "email" | "sms"; contact: string; role: ProjectRole; createdAt: string; expiresAt: string }[];
+};
+
+export type InviteContact = { email: string } | { phone: string } | { agentMachineId: string };
+
+export type InviteResult = {
+  id?: string;
+  contact: string;
+  channel?: "email" | "sms";
+  role?: ProjectRole;
+  /** `handoff`: not sent by the server — deliver `message` yourself (e.g. Messages). */
+  status: "sent" | "handoff" | "added" | "failed";
+  message?: string;
+  error?: string;
+};
+
+/**
+ * `git@github.com:Acme/App.git`, `https://github.com/acme/app` → `github.com/acme/app`.
+ * Returns null for anything that is not a host/path remote.
+ */
+export function repoKeyFromRemote(remote: string): string | null {
+  const s = remote.trim();
+  const m =
+    /^[\w.-]+@([\w.-]+):(.+)$/.exec(s) ?? // scp-like ssh
+    /^(?:https?|ssh|git):\/\/(?:[^@/]+@)?([\w.-]+)(?::\d+)?\/(.+)$/.exec(s);
+  if (!m?.[1] || !m[2]) return null;
+  const path = m[2].replace(/\/+$/, "").replace(/\.git$/, "");
+  return path ? `${m[1]}/${path}`.toLowerCase() : null;
+}
+
 type ErrorBody = { error?: { code?: string; message?: string } };
 
 export class Minimachine {
@@ -95,6 +138,8 @@ export class Minimachine {
       templateId: string;
       name?: string;
       task?: string;
+      /** Link the machine to a project you own or are a member of. */
+      projectId?: string;
     }): Promise<Machine> => {
       const data = await this.request<{ machine: Machine }>("/api/v1/machines", {
         method: "POST",
@@ -167,6 +212,52 @@ export class Minimachine {
         await this.throwFromResponse(res);
       }
       return new Uint8Array(await res.arrayBuffer());
+    },
+  };
+
+  readonly projects = {
+    list: async (): Promise<Project[]> =>
+      (await this.request<{ projects: Project[] }>("/api/v1/projects")).projects,
+    /** Find-or-create your project for a repo (`repoKey`) or, without one, by name. */
+    upsert: async (input: { name: string; repoKey?: string }): Promise<Project> =>
+      (
+        await this.request<{ project: Project }>("/api/v1/projects", {
+          method: "PUT",
+          body: JSON.stringify(input),
+          headers: { "content-type": "application/json" },
+        })
+      ).project,
+    people: async (projectId: string): Promise<ProjectPeople> =>
+      this.request<ProjectPeople>(`/api/v1/projects/${encodeURIComponent(projectId)}/people`),
+    /**
+     * Invite people or another machine's agent (always viewer). Sends real
+     * email/SMS — get a human's yes first. Machine agent keys get a 403.
+     */
+    invite: async (
+      projectId: string,
+      input: { contacts: InviteContact[]; role?: "member" | "viewer"; note?: string },
+    ): Promise<InviteResult[]> =>
+      (
+        await this.request<{ invites: InviteResult[] }>(
+          `/api/v1/projects/${encodeURIComponent(projectId)}/invites`,
+          {
+            method: "POST",
+            body: JSON.stringify(input),
+            headers: { "content-type": "application/json" },
+          },
+        )
+      ).invites,
+    revokeInvite: async (projectId: string, inviteId: string): Promise<void> => {
+      await this.request(
+        `/api/v1/projects/${encodeURIComponent(projectId)}/invites/${encodeURIComponent(inviteId)}`,
+        { method: "DELETE" },
+      );
+    },
+    removeMember: async (projectId: string, principal: string): Promise<void> => {
+      await this.request(
+        `/api/v1/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(principal)}`,
+        { method: "DELETE" },
+      );
     },
   };
 

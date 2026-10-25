@@ -85,6 +85,20 @@
       "when": 1792819916433,
       "tag": "0011_bots_conversations",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792903249380,
+      "tag": "0012_project_invites",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792905846918,
+      "tag": "0013_invite_code_limits",
+      "breakpoints": true
     }
   ]
 }

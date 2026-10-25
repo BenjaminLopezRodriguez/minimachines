@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { verifyApiKey } from "~/server/data/api-keys";
 
-export type ApiAuth = { userId: string; keyId: string };
+export type ApiAuth = { userId: string; keyId: string; agent: boolean };
 
 export async function requireApiKey(
   request: Request,

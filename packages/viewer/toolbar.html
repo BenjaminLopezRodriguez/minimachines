@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<style>
+  :root { --bg:#0d0f14; --field:#171a21; --line:#262a33; --text:#e6e8ec; --muted:#8a90a0; --brand:#6f8cff; --bad:#ff6b6b; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f6f5f2; --field:#fff; --line:#e1e0dc; --text:#15110c; --muted:#6b6860; --brand:#3558f5; --bad:#c62828; } }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 44px; overflow: hidden; background: var(--bg); color: var(--text); font: 13px/1 -apple-system, "Segoe UI", system-ui, sans-serif; -webkit-user-select: none; }
+  body { display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid var(--line); -webkit-app-region: drag; }
+  body.mac { padding-left: 84px; } /* room for the traffic lights */
+  button, input { -webkit-app-region: no-drag; font: inherit; color: inherit; }
+  button { width: 30px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+  button:hover:not(:disabled) { background: var(--field); color: var(--text); }
+  button:disabled { opacity: .35; cursor: default; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+  svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  form { flex: 1; display: flex; align-items: center; height: 30px; padding: 0 10px; gap: 8px; background: var(--field); border: 1px solid var(--line); border-radius: 10px; }
+  form:focus-within { border-color: var(--brand); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); flex: none; }
+  .dot.loading { animation: pulse 1s infinite; }
+  .dot.bad { background: var(--bad); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  @media (prefers-reduced-motion: reduce) { .dot.loading { animation: none; opacity: .5; } }
+  input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-family: ui-monospace, "Geist Mono", Menlo, monospace; font-size: 12.5px; }
+  .err { color: var(--bad); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+  .mark { color: var(--brand); font-weight: 700; letter-spacing: -.02em; padding: 0 4px; }
+</style>
+</head>
+<body>
+  <span class="mark" aria-hidden="true">mm</span>
+  <button id="back" title="Back (⌘[)" aria-label="Back" disabled><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+  <button id="reload" title="Reload (⌘R)" aria-label="Reload"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+  <form id="go" role="search">
+    <span id="dot" class="dot" aria-hidden="true"></span>
+    <input id="addr" aria-label="Address" spellcheck="false" autocomplete="off" placeholder="localhost:3000">
+    <span id="err" class="err" role="status" aria-live="polite"></span>
+  </form>
+  <button id="external" title="Open in your browser" aria-label="Open in your browser"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+  <button id="devtools" title="Developer tools (⌥⌘I)" aria-label="Developer tools"><svg viewBox="0 0 24 24"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13.5 6l-3 12"/></svg></button>
+<script>
+  const $ = (id) => document.getElementById(id);
+  if (navigator.userAgent.includes("Mac")) document.body.classList.add("mac");
+  let editing = false;
+  $("addr").addEventListener("focus", () => { editing = true; $("addr").select(); });
+  $("addr").addEventListener("blur", () => { editing = false; });
+  $("go").addEventListener("submit", (e) => { e.preventDefault(); $("err").textContent = ""; viewer.navigate($("addr").value); $("addr").blur(); });
+  $("back").onclick = () => viewer.back();
+  $("reload").onclick = () => { $("err").textContent = ""; viewer.reload(); };
+  $("external").onclick = () => viewer.external();
+  $("devtools").onclick = () => viewer.devtools();
+  viewer.onState((s) => {
+    if (!editing) $("addr").value = s.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    $("back").disabled = !s.canGoBack;
+    $("dot").className = "dot" + (s.loading ? " loading" : "");
+    if (s.loading) $("err").textContent = "";
+  });
+  viewer.onError((e) => { $("err").textContent = e.message; $("dot").className = "dot bad"; });
+  viewer.onFocusAddress(() => $("addr").focus());
+</script>
+</body>
+</html>

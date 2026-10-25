@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 
 import { env } from "~/env";
 import { db } from "~/server/db";
@@ -10,6 +10,7 @@ import {
   machines as machinesTable,
   mailbox as mailboxTable,
   pagerEvents as pagerEventsTable,
+  projectMembers,
 } from "~/server/db/schema";
 
 import { createAgentKey, revokeAgentKey } from "./api-keys";
@@ -30,6 +31,50 @@ function agentEnv(
 }
 
 type Row = typeof machinesTable.$inferSelect;
+
+/**
+ * `read` = owner, or any member/viewer of the machine's project.
+ * `write` (exec, files, git, stop, restart, shares) = owner or member.
+ * `keyId` adds the calling API key as a principal, for agent viewers.
+ */
+export type MachineAccess = {
+  ownerUserId?: string;
+  keyId?: string;
+  access?: "read" | "write";
+};
+
+export function machineAccess(
+  userId: string,
+  level: "read" | "write" = "write",
+  keyId?: string,
+) {
+  const roles = level === "read" ? ["owner", "member", "viewer"] : ["owner", "member"];
+  const principals = keyId ? [userId, `key:${keyId}`] : [userId];
+  return or(
+    eq(machinesTable.ownerUserId, userId),
+    inArray(
+      machinesTable.projectId,
+      db
+        .select({ id: projectMembers.projectId })
+        .from(projectMembers)
+        .where(
+          and(
+            inArray(projectMembers.principal, principals),
+            inArray(projectMembers.role, roles),
+          ),
+        ),
+    ),
+  );
+}
+
+function accessWhere(id: string, filter?: MachineAccess) {
+  return filter?.ownerUserId
+    ? and(
+        eq(machinesTable.id, id),
+        machineAccess(filter.ownerUserId, filter.access, filter.keyId),
+      )
+    : eq(machinesTable.id, id);
+}
 
 function toMachine(row: Row): Machine {
   return {
@@ -57,16 +102,16 @@ export type CreateMachineInput = {
   name?: string;
   task?: string;
   ownerUserId?: string;
+  /** Caller must already be a member of this project (checked at the API edge). */
+  projectId?: string;
 };
 
-export async function listMachines(filter?: {
-  ownerUserId?: string;
-}): Promise<Machine[]> {
+export async function listMachines(filter?: MachineAccess): Promise<Machine[]> {
   const rows = filter?.ownerUserId
     ? await db
         .select()
         .from(machinesTable)
-        .where(eq(machinesTable.ownerUserId, filter.ownerUserId))
+        .where(machineAccess(filter.ownerUserId, filter.access ?? "read", filter.keyId))
         .orderBy(desc(machinesTable.createdAt))
     : await db
         .select()
@@ -75,19 +120,28 @@ export async function listMachines(filter?: {
   return rows.map(toMachine);
 }
 
+/** Newest machine linked to a project — what the workspace previews. Caller checks membership. */
+export async function projectMachine(projectId: string): Promise<Machine | null> {
+  const [row] = await db
+    .select()
+    .from(machinesTable)
+    .where(eq(machinesTable.projectId, projectId))
+    .orderBy(desc(machinesTable.createdAt))
+    .limit(1);
+  return row ? toMachine(row) : null;
+}
+
 export async function getMachine(
   id: string,
-  filter?: { ownerUserId?: string },
+  filter?: MachineAccess,
 ): Promise<Machine | null> {
-  // Ownership is filtered in SQL so a wrong owner is indistinguishable from
+  // Access is filtered in SQL so a wrong owner is indistinguishable from
   // a missing machine — no existence oracle.
-  const where = filter?.ownerUserId
-    ? and(
-        eq(machinesTable.id, id),
-        eq(machinesTable.ownerUserId, filter.ownerUserId),
-      )
-    : eq(machinesTable.id, id);
-  const [row] = await db.select().from(machinesTable).where(where).limit(1);
+  const [row] = await db
+    .select()
+    .from(machinesTable)
+    .where(accessWhere(id, filter))
+    .limit(1);
   return row ? toMachine(row) : null;
 }
 
@@ -163,6 +217,7 @@ export async function createMachine(
       ports,
       sandboxId,
       ownerUserId: input.ownerUserId,
+      projectId: input.projectId,
     })
     .returning();
 
@@ -172,14 +227,9 @@ export async function createMachine(
 
 export async function stopMachine(
   id: string,
-  filter?: { ownerUserId?: string },
+  filter?: MachineAccess,
 ): Promise<Machine | null> {
-  const where = filter?.ownerUserId
-    ? and(
-        eq(machinesTable.id, id),
-        eq(machinesTable.ownerUserId, filter.ownerUserId),
-      )
-    : eq(machinesTable.id, id);
+  const where = accessWhere(id, filter);
   // Mark stopped first: the DB is the source of truth the user sees, and a
   // Modal hiccup must not leave a machine looking "running" forever. The
   // console URL is cleared because the tunnel dies with the sandbox.
@@ -228,12 +278,12 @@ function ownerWhere(id: string, ownerUserId?: string) {
  */
 export async function restartMachine(
   id: string,
-  filter?: { ownerUserId?: string },
+  filter?: MachineAccess,
 ): Promise<Machine | null> {
   const [row] = await db
     .select()
     .from(machinesTable)
-    .where(ownerWhere(id, filter?.ownerUserId))
+    .where(accessWhere(id, filter))
     .limit(1);
   if (!row) return null;
 
@@ -290,7 +340,7 @@ export async function restartMachine(
   return updated ? toMachine(updated) : null;
 }
 
-/** Terminate the sandbox and delete the machine and its session data. */
+/** Terminate the sandbox and delete the machine and its session data. Owner only. */
 export async function deleteMachine(
   id: string,
   filter?: { ownerUserId?: string },

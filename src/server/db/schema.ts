@@ -1,4 +1,5 @@
-import { index, pgTableCreator, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { index, pgTableCreator, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
 
 /**
  * Multi-project schema feature of Drizzle ORM — lets the same database
@@ -90,6 +91,8 @@ export const machines = createTable(
     /** Modal sandbox backing this machine, when provisioned. */
     sandboxId: d.varchar({ length: 128 }),
     ownerUserId: d.varchar({ length: 128 }),
+    /** Project this machine belongs to; members of it can reach the machine. */
+    projectId: d.uuid(),
     /** Exposed port → public tunnel URL, captured at provision (for shares). */
     ports: d.jsonb(),
     createdAt: d
@@ -97,7 +100,10 @@ export const machines = createTable(
       .$defaultFn(() => new Date())
       .notNull(),
   }),
-  (t) => [index("machine_owner_idx").on(t.ownerUserId)],
+  (t) => [
+    index("machine_owner_idx").on(t.ownerUserId),
+    index("machine_project_idx").on(t.projectId),
+  ],
 );
 
 export const execs = createTable(
@@ -334,3 +340,86 @@ export const botMessages = createTable("bot_message", (d) => ({
   replyTo: d.uuid(),
   createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
 }), (t) => [index("bot_message_conversation_idx").on(t.conversationId, t.createdAt), uniqueIndex("bot_message_reply_idx").on(t.replyTo)]);
+
+/**
+ * A shared workspace: usually a git repo (`repoKey` = normalized origin, e.g.
+ * `github.com/acme/app`), or a named project when there is no repo.
+ */
+export const projects = createTable(
+  "project",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    ownerUserId: d.varchar({ length: 128 }).notNull(),
+    name: d.varchar({ length: 128 }).notNull(),
+    repoKey: d.varchar({ length: 256 }),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    uniqueIndex("project_owner_repo_idx").on(t.ownerUserId, t.repoKey),
+    // Names repeat across repos (two repos called "app"); only repo-less projects are unique by name.
+    uniqueIndex("project_owner_named_idx").on(t.ownerUserId, t.name).where(sql`"repoKey" IS NULL`),
+  ],
+);
+
+/**
+ * `principal` is a WorkOS user id, or `key:<apiKeyId>` for another machine's
+ * agent added as a viewer. Roles: owner | member | viewer.
+ */
+export const projectMembers = createTable(
+  "project_member",
+  (d) => ({
+    projectId: d.uuid().notNull(),
+    principal: d.varchar({ length: 128 }).notNull(),
+    role: d.varchar({ length: 16 }).notNull(),
+    invitedBy: d.varchar({ length: 128 }),
+    joinedAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.principal] }),
+    index("project_member_principal_idx").on(t.principal),
+  ],
+);
+
+/**
+ * Invite link token and join code are stored as sha256 only. The code is
+ * minted when the invitee asks for it on the join page and goes to `contact`,
+ * so a forwarded link alone cannot be accepted.
+ */
+export const projectInvites = createTable(
+  "project_invite",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    projectId: d.uuid().notNull(),
+    tokenHash: d.varchar({ length: 64 }).notNull(),
+    role: d.varchar({ length: 16 }).notNull(), // member | viewer
+    channel: d.varchar({ length: 8 }).notNull(), // email | sms
+    contact: d.varchar({ length: 320 }).notNull(),
+    note: d.varchar({ length: 280 }),
+    codeRequired: d.boolean().notNull().default(true),
+    codeHash: d.varchar({ length: 64 }),
+    codeExpiresAt: d.timestamp({ withTimezone: true }),
+    codeTries: d.integer().notNull().default(0),
+    /** Codes sent for this invite, and when the last went out — caps re-sends. */
+    codesSent: d.integer().notNull().default(0),
+    codeSentAt: d.timestamp({ withTimezone: true }),
+    invitedBy: d.varchar({ length: 128 }).notNull(),
+    expiresAt: d.timestamp({ withTimezone: true }).notNull(),
+    acceptedAt: d.timestamp({ withTimezone: true }),
+    acceptedBy: d.varchar({ length: 128 }),
+    revokedAt: d.timestamp({ withTimezone: true }),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    uniqueIndex("project_invite_token_idx").on(t.tokenHash),
+    index("project_invite_project_idx").on(t.projectId),
+  ],
+);

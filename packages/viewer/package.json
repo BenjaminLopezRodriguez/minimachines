@@ -1,0 +1,50 @@
+{
+  "name": "@minimachines/viewer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A single-window viewport for web apps in development, opened by `mm view`",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:dir": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "es.minimachin.viewer",
+    "productName": "minimachines viewer",
+    "files": [
+      "main.js",
+      "toolbar.html",
+      "toolbar-preload.js",
+      "!node_modules/**/*"
+    ],
+    "asar": true,
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development",
+      "executableName": "mm-viewer"
+    },
+    "npmRebuild": false
+  }
+}

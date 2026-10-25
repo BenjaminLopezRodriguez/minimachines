@@ -54,8 +54,12 @@ export type SessionStore = {
   jobs: Job[];
 };
 
-async function requireOwnedMachine(machineId: string, ownerUserId: string) {
-  const machine = await getMachine(machineId, { ownerUserId });
+async function requireOwnedMachine(
+  machineId: string,
+  ownerUserId: string,
+  access: "read" | "write" = "write",
+) {
+  const machine = await getMachine(machineId, { ownerUserId, access });
   if (!machine) {
     throw new Error(`Machine not found: ${machineId}`);
   }
@@ -210,7 +214,7 @@ export async function getMachineFile(
   path: string,
   opts: { ownerUserId: string },
 ): Promise<Uint8Array | null> {
-  await requireOwnedMachine(machineId, opts.ownerUserId);
+  await requireOwnedMachine(machineId, opts.ownerUserId, "read"); // viewers may read files
   const [row] = await db
     .select({ content: machineFiles.content })
     .from(machineFiles)

@@ -1,0 +1,14 @@
+{
+  "name": "minimachines-sync",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // One Durable Object per project. The binding name becomes the party in the
+  // URL: /parties/main/<projectId>.
+  "durable_objects": {
+    "bindings": [{ "name": "Main", "class_name": "ProjectRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProjectRoom"] }]
+  // Secret (wrangler secret put SYNC_SECRET; .dev.vars locally): SYNC_SECRET,
+  // the same value the app uses to sign room tokens.
+}
