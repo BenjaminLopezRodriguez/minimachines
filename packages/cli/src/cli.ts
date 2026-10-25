@@ -78,6 +78,9 @@ function usage(exitCode = 1): never {
   minimachines people [--json] [--project <name>]          people on this repo's project
   minimachines people + <row|email|+phone|agent:<id>>... [--view] [--note <text>] [--yes]
   minimachines people - <row|email|+phone>...              revoke an invite / remove a member
+  minimachines up [dir]                                    share this folder as a live project; prints a link anyone invited can open
+  minimachines sync [dir] [--project <id>]                 keep a folder in step with its live project
+  minimachines join <link> [dir] [--here]                  pull a project you were invited to, then keep it in sync
   minimachines view [<url>|<port>|<machineId>]             open a dev app in the desktop viewer (default :3000)
   minimachines tui [--json] [--test]                       dashboard: machines, shares, people (? for keys)
   minimachines code [--machine <id>] [-p <prompt>] [--yes]  coding agent (needs ANTHROPIC_API_KEY)
@@ -923,6 +926,16 @@ async function main() {
     return out;
   })();
 
+  if (cmd === "up" || cmd === "sync" || cmd === "join") {
+    if (typeof WebSocket === "undefined") {
+      console.error("Live sync needs Node 22 or newer.");
+      process.exit(1);
+    }
+    const sync = await import("./sync.js");
+    const run = cmd === "up" ? sync.upCommand : cmd === "sync" ? sync.syncCommand : sync.joinCommand;
+    await run(args.slice(1), { api: apiOrThrow, baseUrl: baseUrl() });
+    return;
+  }
   if (cmd === "view") {
     await view(positional[1]);
     return;
@@ -1081,7 +1094,7 @@ async function main() {
   // user on an older CLI learns to upgrade instead of re-reading usage.
   const known = [
     "run", "agent", "login", "logout", "whoami", "pager", "share",
-    "create", "exec", "put", "ask", "say", "stop", "skill", "people", "code", "tui", "view",
+    "create", "exec", "put", "ask", "say", "stop", "skill", "people", "code", "tui", "view", "up", "sync", "join",
   ];
   if (cmd && !known.includes(cmd)) {
     console.error(

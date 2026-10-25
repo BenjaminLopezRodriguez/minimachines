@@ -1,0 +1,22 @@
+{
+  "name": "@minimachines/sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Live project rooms: one Durable Object per project holding its Yjs document",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "partyserver": "0.5.10",
+    "y-partyserver": "2.2.0",
+    "yjs": "13.6.33"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261010.1",
+    "typescript": "^5.8.2",
+    "wrangler": "4.149.0"
+  }
+}

@@ -28,6 +28,9 @@ export const env = createEnv({
     TWILIO_ACCOUNT_SID: z.string().optional(),
     TWILIO_AUTH_TOKEN: z.string().optional(),
     TWILIO_MESSAGING_SERVICE_SID: z.string().optional(),
+    // Live project rooms (packages/sync). Unset → collaboration is off.
+    SYNC_URL: z.string().url().optional(),
+    SYNC_SECRET: z.string().min(32).optional(),
     // Public origin used for reply links and injected into sandboxes.
     APP_BASE_URL: z.string().url().optional(),
     // Web Push (VAPID). Unset → push is a no-op; email still works.
@@ -61,6 +64,8 @@ export const env = createEnv({
     TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
     TWILIO_MESSAGING_SERVICE_SID: process.env.TWILIO_MESSAGING_SERVICE_SID,
     APP_BASE_URL: process.env.APP_BASE_URL,
+    SYNC_URL: process.env.SYNC_URL,
+    SYNC_SECRET: process.env.SYNC_SECRET,
     VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
     VAPID_SUBJECT: process.env.VAPID_SUBJECT,
     NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
