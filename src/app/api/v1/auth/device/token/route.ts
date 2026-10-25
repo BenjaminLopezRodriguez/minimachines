@@ -1,7 +1,10 @@
+import { publicRequestLimit } from "~/server/lib/public-rate-limit";
 import { jsonError, jsonOk } from "~/server/api/v1/respond";
 import { redeemDeviceToken } from "~/server/data/device-codes";
 
 export async function POST(request: Request) {
+  const limited = await publicRequestLimit(request, "device-poll", 60);
+  if (limited) return limited;
   const origin = new URL(request.url).origin;
 
   let body: unknown;
@@ -25,7 +28,11 @@ export async function POST(request: Request) {
         400,
       );
     case "access_denied":
-      return jsonError("access_denied", "The authorization request was denied", 400);
+      return jsonError(
+        "access_denied",
+        "The authorization request was denied",
+        400,
+      );
     case "expired_token":
       return jsonError("expired_token", "The device code has expired", 400);
     case "already_used":

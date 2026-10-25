@@ -1,3 +1,5 @@
+import { requireBetaAccess } from "~/server/data/beta";
+import { requireVerifiedAccount } from "~/server/lib/verified-account";
 import { createHash, randomBytes } from "node:crypto";
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
@@ -47,6 +49,8 @@ export async function createApiKey(input: {
   userId: string;
   label?: string;
 }): Promise<{ key: ApiKeyPublic; secret: string }> {
+  await requireVerifiedAccount(input.userId);
+  await requireBetaAccess(input.userId);
   const raw = randomBytes(32).toString("hex");
   const secret = `mm_${raw}`;
   const [row] = await db
@@ -98,7 +102,10 @@ export async function createAgentKey(
   userId: string,
   machineId: string,
 ): Promise<string> {
-  const { secret } = await createApiKey({ userId, label: `agent:${machineId}` });
+  const { secret } = await createApiKey({
+    userId,
+    label: `agent:${machineId}`,
+  });
   return secret;
 }
 
@@ -120,9 +127,12 @@ export async function revokeAgentKey(
     .returning({ id: apiKeys.id });
   // A dead key's viewer seats in other projects go with it.
   if (revoked.length) {
-    await db
-      .delete(projectMembers)
-      .where(inArray(projectMembers.principal, revoked.map((k) => `key:${k.id}`)));
+    await db.delete(projectMembers).where(
+      inArray(
+        projectMembers.principal,
+        revoked.map((k) => `key:${k.id}`),
+      ),
+    );
   }
 }
 
@@ -138,11 +148,19 @@ export async function verifyApiKey(
     .where(
       and(eq(apiKeys.keyHash, hashSecret(secret)), isNull(apiKeys.revokedAt)),
     )
-    .returning({ id: apiKeys.id, userId: apiKeys.userId, label: apiKeys.label });
+    .returning({
+      id: apiKeys.id,
+      userId: apiKeys.userId,
+      label: apiKeys.label,
+    });
 
   // Machine-scoped agent keys are labeled `agent:<machineId>` at mint time.
   return row
-    ? { userId: row.userId, keyId: row.id, agent: row.label.startsWith("agent:") }
+    ? {
+        userId: row.userId,
+        keyId: row.id,
+        agent: row.label.startsWith("agent:"),
+      }
     : null;
 }
 

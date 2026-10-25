@@ -24,6 +24,7 @@ export function MessengerDashboard({
       </a>
       <header className="mm-messenger-header">
         <div className="mm-messenger-brand">
+          <div id="mm-header-leading" className="mm-header-slot" />
           <PageSwitcher
             title="minimachines"
             brand
@@ -49,12 +50,15 @@ export function MessengerDashboard({
           </Link>
         </nav>
         <div className="mm-messenger-appearance">
+          <div id="mm-header-trailing" className="mm-header-slot" />
           <ThemeToggle />
         </div>
       </header>
       <div id="messenger-content" className="mm-messenger-content">
         <section hidden={mode !== "bot"} aria-label="Bot conversations">
-          {botContent ?? <BotsWorkspace />}
+          {botContent ?? (
+            <BotsWorkspace variant="messenger" active={mode === "bot"} />
+          )}
         </section>
         <section hidden={mode !== "whiteboard"} aria-label="Project whiteboard">
           {whiteboard}

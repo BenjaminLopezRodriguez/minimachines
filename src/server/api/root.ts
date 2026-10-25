@@ -1,3 +1,4 @@
+import { betaRouter } from "~/server/api/routers/beta";
 import { apiKeysRouter } from "~/server/api/routers/apiKeys";
 import { machinesRouter } from "~/server/api/routers/machines";
 import { orgsRouter } from "~/server/api/routers/orgs";
@@ -16,6 +17,7 @@ import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
+  beta: betaRouter,
   waitlist: waitlistRouter,
   machines: machinesRouter,
   git: gitRouter,

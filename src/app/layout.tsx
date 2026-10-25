@@ -8,7 +8,9 @@ import "~/styles/mobile.css";
 import "~/styles/materials.css";
 import "~/styles/landing.css";
 import "~/styles/messenger.css";
+import "~/styles/beta.css";
 
+import { ProductAnalytics } from "~/components/analytics/product-analytics";
 import { type Metadata } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 
@@ -79,6 +81,7 @@ export default function RootLayout({
         <ThemeProvider>
           <TRPCReactProvider>{children}</TRPCReactProvider>
         </ThemeProvider>
+        <ProductAnalytics />
       </body>
     </html>
   );

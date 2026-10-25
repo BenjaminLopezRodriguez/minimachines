@@ -8,6 +8,7 @@ import {
   GitBranch,
   KeyRound,
   LogOut,
+  Menu,
   Server,
   PanelsTopLeft,
   Terminal,
@@ -26,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 
-const pages = [
+export const pages = [
   { href: "/dashboard", label: "Bot", icon: Bot },
   {
     href: "/dashboard?mode=whiteboard",
@@ -36,6 +37,7 @@ const pages = [
   { href: "/dashboard/machines", label: "Machines", icon: Server },
   { href: "/dashboard/git", label: "Git workspace", icon: GitBranch },
   { href: "/dashboard/team", label: "Team", icon: Users },
+  { href: "/beta", label: "Beta program", icon: Users },
   { href: "/dashboard/settings", label: "Keys & MCP", icon: KeyRound },
   { href: "/dashboard/docs", label: "Setup & docs", icon: BookOpen },
 ];
@@ -61,9 +63,18 @@ export function PageSwitcher({
             className="mm-page-switcher"
             aria-label={`Switch page: ${title}`}
           >
+            <Menu
+              className="mm-page-switcher-burger"
+              size={20}
+              aria-hidden="true"
+            />
             {brand && <BrandMark className="mm-brand-mark" />}
             <span>{title}</span>
-            <ChevronDown size={18} aria-hidden="true" />
+            <ChevronDown
+              className="mm-page-switcher-chevron"
+              size={18}
+              aria-hidden="true"
+            />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent

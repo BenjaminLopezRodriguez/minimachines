@@ -24,10 +24,15 @@ export async function sendEmail(input: {
       authorization: `Bearer ${env.RESEND_API_KEY}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ from, to: input.to, subject: input.subject, text: input.text }),
+    body: JSON.stringify({
+      from,
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+    }),
   });
   if (!res.ok) {
-    throw new Error(`Resend ${res.status}: ${await res.text().catch(() => "")}`);
+    throw new Error(`Email delivery failed (${res.status}).`);
   }
   return true;
 }
@@ -43,5 +48,5 @@ export async function sendPagerEmail(input: {
     subject: `[minimachines] agent ${input.kind}`,
     text: `${input.text}\n\nReply: ${input.link}`,
   });
-  if (!sent) console.warn("[pager] email not sent", { kind: input.kind, link: input.link });
+  if (!sent) throw new Error("Email delivery is not configured.");
 }

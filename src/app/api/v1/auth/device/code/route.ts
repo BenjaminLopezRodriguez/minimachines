@@ -1,7 +1,10 @@
+import { publicRequestLimit } from "~/server/lib/public-rate-limit";
 import { jsonOk } from "~/server/api/v1/respond";
 import { createDeviceCode } from "~/server/data/device-codes";
 
 export async function POST(request: Request) {
+  const limited = await publicRequestLimit(request, "device-code", 10);
+  if (limited) return limited;
   const origin = new URL(request.url).origin;
   const created = await createDeviceCode();
   const verificationUri = `${origin}/dashboard/cli/approve`;

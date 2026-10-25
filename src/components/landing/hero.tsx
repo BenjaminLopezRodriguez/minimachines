@@ -19,15 +19,15 @@ export function Hero() {
           it needs a hand, the baton brings the question back to you.
         </p>
         <div className="mm-home-actions">
-          <Link className="mm-gloss mm-gloss-primary" href="/install">
-            Start a project <ArrowRight size={17} aria-hidden="true" />
+          <Link className="mm-gloss mm-gloss-primary" href="/early-access">
+            Join early access <ArrowRight size={17} aria-hidden="true" />
           </Link>
           <a className="mm-home-tour" href="#how-it-works">
             Take a look around <ArrowDown size={16} aria-hidden="true" />
           </a>
         </div>
         <p className="mm-home-setup-note">
-          Set up with the CLI. Bring Codex, Claude Code, or Cursor.
+          A small beta. Bring Codex, Claude Code, or Cursor.
         </p>
       </div>
       <ProjectStory />

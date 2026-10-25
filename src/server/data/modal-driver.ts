@@ -110,7 +110,11 @@ const MM_PAGER_COMMANDS: string[] = [
     "tools/agent-pager-SKILL.md",
     "/home/agent/.claude/skills/agent-pager/SKILL.md",
   ),
-  "RUN chown -R agent /home/agent/.claude 2>/dev/null || true",
+  embedFile(
+    "tools/agent-pager-SKILL.md",
+    "/home/agent/.agents/skills/agent-pager/SKILL.md",
+  ),
+  "RUN chown -R agent /home/agent/.claude /home/agent/.agents 2>/dev/null || true",
 ].filter((c): c is string => Boolean(c));
 
 type ImagePlan = { base: string; commands: string[]; command: string[] };
@@ -224,10 +228,18 @@ export async function provisionMachine(opts: {
           `falling back to the generic image (no template toolchain)`,
         err,
       );
-      sandbox = await mkSandbox("node:22-alpine", [...IMAGE_COMMANDS, ...MM_PAGER_COMMANDS], TTYD_CMD);
+      sandbox = await mkSandbox(
+        "node:22-alpine",
+        [...IMAGE_COMMANDS, ...MM_PAGER_COMMANDS],
+        TTYD_CMD,
+      );
     }
   } else {
-    sandbox = await mkSandbox("node:22-alpine", [...IMAGE_COMMANDS, ...MM_PAGER_COMMANDS], TTYD_CMD);
+    sandbox = await mkSandbox(
+      "node:22-alpine",
+      [...IMAGE_COMMANDS, ...MM_PAGER_COMMANDS],
+      TTYD_CMD,
+    );
   }
 
   // A sandbox is usable even if the tunnel lookup fails; surface it as a

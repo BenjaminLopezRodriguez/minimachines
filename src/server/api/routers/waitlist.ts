@@ -1,12 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
-import { waitlist } from "~/server/db/schema";
-import { rateLimit } from "~/server/lib/rate-limit";
-
-const POSTGRES_UNIQUE_VIOLATION = "23505";
-
+import { joinEarlyAccess } from "~/server/data/beta";
+import {
+  enforceRateLimit,
+  requestIp,
+  RequestLimitError,
+} from "~/server/lib/distributed-rate-limit";
 export const waitlistRouter = createTRPCRouter({
   join: publicProcedure
     .input(
@@ -15,47 +15,32 @@ export const waitlistRouter = createTRPCRouter({
           .string()
           .trim()
           .toLowerCase()
+          .max(320)
           .email("Enter a valid email address."),
-        // Honeypot — bots fill it, humans never see it.
-        website: z.string().optional(),
+        website: z.string().max(200).optional(),
+        feedbackConsent: z.boolean().default(false),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Honeypot tripped: look successful, insert nothing.
-      if (input.website) return { id: undefined };
-
-      // x-real-ip is set by Vercel to the true client IP. Don't trust the
-      // leftmost x-forwarded-for entry — the client can spoof it.
-      const ip = ctx.headers.get("x-real-ip")?.trim() ?? "unknown";
-      if (!rateLimit(`waitlist:${ip}`, { limit: 5, windowMs: 10 * 60_000 }).ok) {
-        throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "Too many attempts. Please try again in a few minutes.",
-        });
-      }
-
+      if (input.website) return { ok: true };
       try {
-        const [entry] = await ctx.db
-          .insert(waitlist)
-          .values({ email: input.email })
-          .returning({ id: waitlist.id });
-
-        return { id: entry?.id };
+        await enforceRateLimit(
+          `waitlist:ip:${requestIp(ctx.headers)}`,
+          5,
+          10 * 60_000,
+        );
+        await enforceRateLimit(`waitlist:email:${input.email}`, 3, 60 * 60_000);
+        await joinEarlyAccess(input.email, input.feedbackConsent);
+        return { ok: true };
       } catch (error) {
-        if (
-          error instanceof Error &&
-          "code" in error &&
-          error.code === POSTGRES_UNIQUE_VIOLATION
-        ) {
+        if (error instanceof RequestLimitError)
           throw new TRPCError({
-            code: "CONFLICT",
-            message: "This email is already on the waitlist.",
+            code: "TOO_MANY_REQUESTS",
+            message: error.message,
           });
-        }
-
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Something went wrong. Please try again.",
+          message: "We couldn’t save your signup. Please try again shortly.",
         });
       }
     }),

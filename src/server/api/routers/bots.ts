@@ -1,3 +1,7 @@
+import { agentConnection } from "~/server/data/agent-connection";
+import { ensureEmailContact } from "~/server/data/pager";
+import { RequestLimitError } from "~/server/lib/distributed-rate-limit";
+import { enforceRateLimit } from "~/server/lib/distributed-rate-limit";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { botSchema } from "~/lib/bots";
@@ -19,7 +23,10 @@ async function handled<T>(operation: () => Promise<T>) {
     return await operation();
   } catch (error) {
     throw new TRPCError({
-      code: "BAD_REQUEST",
+      code:
+        error instanceof RequestLimitError
+          ? "TOO_MANY_REQUESTS"
+          : "BAD_REQUEST",
       message:
         error instanceof Error
           ? error.message
@@ -28,6 +35,26 @@ async function handled<T>(operation: () => Promise<T>) {
   }
 }
 export const botsRouter = createTRPCRouter({
+  connection: protectedProcedure
+    .input(
+      z.object({
+        machineId: z.string().min(1).max(64),
+        provider: z.enum(["claude", "codex"]),
+        disconnect: z.boolean().default(false),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      handled(async () => {
+        if (!ctx.user) throw new Error("Sign in to connect your agent.");
+        await ensureEmailContact(ctx.user);
+        return agentConnection(
+          ctx.userId,
+          input.machineId,
+          input.provider,
+          input.disconnect,
+        );
+      }),
+    ),
   list: protectedProcedure.query(({ ctx }) => listBots(ctx.userId)),
   save: protectedProcedure
     .input(botSchema.extend({ id: z.string().uuid().optional() }))
@@ -68,6 +95,9 @@ export const botsRouter = createTRPCRouter({
       }),
     )
     .mutation(({ ctx, input }) =>
-      handled(() => sendBotMessage(ctx.userId, input)),
+      handled(async () => {
+        await enforceRateLimit(`bot-send:${ctx.userId}`, 20, 60 * 60_000);
+        return sendBotMessage(ctx.userId, input);
+      }),
     ),
 });

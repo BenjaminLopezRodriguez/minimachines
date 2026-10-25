@@ -2,18 +2,24 @@
 
 import {
   Bot,
-  Check,
-  ChevronRight,
+  LogOut,
+  Menu,
   MessageSquare,
   Plus,
   RotateCcw,
   Settings,
+  SquarePen,
   Trash2,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { ChatWelcome, ChatComposer } from "./chat-surface";
-import { MobileDisclosure } from "~/components/mobile-disclosure";
+import { createPortal } from "react-dom";
+import { AgentConnection } from "./agent-connection";
+import { FeedbackButton } from "~/components/beta/feedback-button";
+import { signOutAction } from "~/components/dashboard/actions";
+import { pages } from "~/components/dashboard/page-switcher";
+import { trackProduct } from "~/lib/analytics";
+import { ChatWelcome, ChatComposer, ChatSuggestions } from "./chat-surface";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +33,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { BotInput } from "~/lib/bots";
 import type { RouterOutputs } from "~/trpc/react";
 import { api } from "~/trpc/react";
@@ -50,10 +56,10 @@ function BotEditor({
   onSave: (input: BotInput) => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState(bot?.name ?? "");
+  const [name, setName] = useState(bot?.name ?? "My bot");
   const [instructions, setInstructions] = useState(
     bot?.instructions ??
-      "Be a thoughtful, practical assistant. Ask a useful question when context is missing. Keep answers clear and concise.",
+      "Be a thoughtful, practical assistant. Infer sensible defaults and offer a useful first draft. Ask one question only when it blocks progress. Keep answers clear and concise.",
   );
   const [machineId, setMachineId] = useState(
     bot?.machineId ?? machines.find((m) => m.status === "running")?.id ?? "",
@@ -63,94 +69,60 @@ function BotEditor({
   );
   return (
     <div className="mm-bot-editor">
-      <div className="mm-bot-editor-intro">
-        <span className="mm-bot-mark">
-          <Bot size={25} />
-        </span>
-        <h1>{bot ? "Shape your bot" : "A bot of your own"}</h1>
-        <p>Give it a purpose. Connect an agent. Start a conversation.</p>
-      </div>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onSave({ name, instructions, machineId, provider });
         }}
       >
-        <label htmlFor="bot-name">Name</label>
-        <input
-          id="bot-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Product thinking partner"
-          required
-          maxLength={80}
-        />
-        <label htmlFor="bot-instructions">How should it help?</label>
-        <textarea
-          id="bot-instructions"
-          value={instructions}
-          onChange={(e) => setInstructions(e.target.value)}
-          rows={5}
-          required
-          maxLength={3000}
-        />
-        <p className="mm-bot-field-hint">
-          Its role, tone and preferences. You can change these anytime.
-        </p>
-        <MobileDisclosure
-          title="Agent & connection"
-          description={`${provider === "claude" ? "Claude Code" : "Codex"} · ${machines.find((m) => m.id === machineId)?.name ?? "Choose a machine"}`}
+        <label htmlFor="bot-provider">Your coding agent</label>
+        <select
+          id="bot-provider"
+          value={provider}
+          onChange={(e) => setProvider(e.target.value as BotInput["provider"])}
         >
-          <div className="mm-bot-form-row">
-            <div>
-              <label htmlFor="bot-provider">Coding agent</label>
-              <select
-                id="bot-provider"
-                value={provider}
-                onChange={(e) =>
-                  setProvider(e.target.value as BotInput["provider"])
-                }
-              >
-                <option value="claude">Claude Code</option>
-                <option value="codex">Codex</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="bot-machine">Connected machine</label>
-              <select
-                id="bot-machine"
-                value={machineId}
-                onChange={(e) => setMachineId(e.target.value)}
-                required
-              >
-                <option value="" disabled>
-                  Select a machine
-                </option>
-                {machines.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} · {m.status}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="mm-bot-account-note">
-            <Check size={16} />
-            <p>
-              Uses the agent account signed in on this machine. Install the
-              current CLI and sign in through the{" "}
-              <Link href="/dashboard/machines">machine console</Link> before
-              chatting.
-            </p>
-          </div>
-        </MobileDisclosure>
-        {!machines.length && (
-          <p className="mm-bot-error">
-            Create a machine in{" "}
-            <Link href="/dashboard/machines">Mini Machines</Link> to connect
-            your first bot.
-          </p>
-        )}
+          <option value="claude">Claude Code</option>
+          <option value="codex">Codex</option>
+        </select>
+        <AgentConnection
+          key={`${machineId}:${provider}`}
+          machine={machines.find((m) => m.id === machineId)}
+          provider={provider}
+          onMachine={setMachineId}
+        />
+        <details className="mm-agent-options">
+          <summary>Personalize & workspace options</summary>
+          <label htmlFor="bot-name">Name</label>
+          <input
+            id="bot-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            maxLength={80}
+          />
+          <label htmlFor="bot-instructions">Preferences</label>
+          <textarea
+            id="bot-instructions"
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            rows={3}
+            required
+            maxLength={3000}
+          />
+          <label htmlFor="bot-machine">Workspace</label>
+          <select
+            id="bot-machine"
+            value={machineId}
+            onChange={(e) => setMachineId(e.target.value)}
+          >
+            <option value="">New workspace</option>
+            {machines.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} · {m.status}
+              </option>
+            ))}
+          </select>
+        </details>
         {error && (
           <p className="mm-bot-error" role="alert">
             {error}
@@ -171,8 +143,7 @@ function BotEditor({
               busy || !machineId || !name.trim() || !instructions.trim()
             }
           >
-            {busy ? "Saving…" : bot ? "Save bot" : "Create bot"}
-            <ChevronRight size={15} />
+            {busy ? "Saving…" : bot ? "Save" : "Continue"}
           </button>
         </div>
       </form>
@@ -180,7 +151,21 @@ function BotEditor({
   );
 }
 
-export function BotsWorkspace() {
+/** Renders into a slot owned by the messenger header, once it exists. */
+function HeaderSlot({ id, children }: { id: string; children: ReactNode }) {
+  const [target, setTarget] = useState<HTMLElement | null>(null);
+  useEffect(() => setTarget(document.getElementById(id)), [id]);
+  return target ? createPortal(children, target) : null;
+}
+
+export function BotsWorkspace({
+  variant = "page",
+  active = true,
+}: {
+  variant?: "page" | "messenger";
+  active?: boolean;
+} = {}) {
+  const messenger = variant === "messenger";
   const bots = api.bots.list.useQuery();
   const machines = api.machines.list.useQuery();
   const utils = api.useUtils();
@@ -261,6 +246,7 @@ export function BotsWorkspace() {
       return;
     }
     if (botMachine?.status !== "running") return;
+    trackProduct("bot_message_submitted", "bot");
     setSending(true);
     setLocalError("");
     setOptimistic({ id: requestId, content });
@@ -275,6 +261,7 @@ export function BotsWorkspace() {
       }
       activeConversation = id;
       await send.mutateAsync({ conversationId: id, requestId, content });
+      trackProduct("bot_reply_received", "bot");
       await Promise.all([
         utils.bots.conversation.invalidate({ id }),
         utils.bots.conversations.invalidate({ id: bot.id }),
@@ -431,13 +418,341 @@ export function BotsWorkspace() {
           )}
         </div>
       )}
-      <div className="mm-bots-sidebar-footer">
-        <span className="mm-bot-connection-dot" />
-        Your agents. Your conversations.
-        <p>Powered by the account on your machine.</p>
-      </div>
     </aside>
   );
+
+  const openSettings = () => {
+    setLibraryOpen(false);
+    setEditing(bot ? "edit" : "new");
+    save.reset();
+  };
+  const startNewChat = () => {
+    setLibraryOpen(false);
+    resetChat();
+    setEditing(null);
+  };
+
+  const messengerLibrary = (
+    <aside className="mm-bots-sidebar mm-chat-sidebar">
+      <button
+        className="mm-chat-sidebar-new"
+        onClick={startNewChat}
+        disabled={busy}
+      >
+        <SquarePen size={18} aria-hidden="true" />
+        New chat
+      </button>
+      {(bots.data?.length ?? 0) > 1 && (
+        <div className="mm-chat-sidebar-bots" aria-label="Bots">
+          {bots.data?.map((profile) => (
+            <button
+              key={profile.id}
+              aria-pressed={profile.id === activeBotId}
+              disabled={busy}
+              onClick={() => {
+                setLibraryOpen(false);
+                setSelectedBot(profile.id);
+                setEditing(null);
+                resetChat();
+              }}
+            >
+              <Bot size={16} aria-hidden="true" />
+              <span>{profile.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {bots.error ? (
+        <p className="mm-bot-error" role="alert">
+          {bots.error.message}
+        </p>
+      ) : conversations.error ? (
+        <p className="mm-bot-error" role="alert">
+          {conversations.error.message}
+        </p>
+      ) : conversations.data?.length ? (
+        <nav className="mm-chat-sidebar-list" aria-label="Chats">
+          <h2>Chats</h2>
+          {conversations.data.map((c) => {
+            const current = conversationId === c.id;
+            return (
+              <div key={c.id} className="mm-chat-sidebar-row">
+                <button
+                  aria-current={current ? "page" : undefined}
+                  disabled={busy}
+                  onClick={() => {
+                    setLibraryOpen(false);
+                    setConversationId(c.id);
+                    setEditing(null);
+                    setOptimistic(null);
+                    setLocalError("");
+                    setConfirmDelete(null);
+                    setDraft("");
+                    send.reset();
+                  }}
+                >
+                  {c.title}
+                </button>
+                {current && (
+                  <button
+                    className="mm-chat-sidebar-delete"
+                    aria-label={`Delete ${c.title}`}
+                    title="Delete chat"
+                    disabled={busy || serverBusy}
+                    onClick={() => {
+                      setLibraryOpen(false);
+                      setConfirmDelete("conversation");
+                    }}
+                  >
+                    <Trash2 size={15} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+      ) : null}
+      <div className="mm-chat-sidebar-footer">
+        <button onClick={openSettings} disabled={busy}>
+          <Settings size={17} aria-hidden="true" />
+          {bot ? "Bot settings" : "Connect your agent"}
+        </button>
+        <FeedbackButton surface="bot" label="Send feedback" />
+      </div>
+      <nav className="mm-chat-sidebar-pages" aria-label="Pages">
+        {pages
+          .filter(({ href }) => !href.startsWith("/dashboard?") && href !== "/dashboard")
+          .map(({ href, label, icon: Icon }) => (
+            <Link key={href} href={href} prefetch={false}>
+              <Icon size={17} aria-hidden="true" />
+              {label}
+            </Link>
+          ))}
+        <button onClick={() => void signOutAction()}>
+          <LogOut size={17} aria-hidden="true" />
+          Sign out
+        </button>
+      </nav>
+    </aside>
+  );
+
+  if (messenger) {
+    const hasMessages = messages.length > 0 || !!optimistic;
+    return (
+      <div className="mm-bots-workspace mm-chat-workspace">
+        {active && (
+          <>
+            <HeaderSlot id="mm-header-leading">
+              <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
+                <DialogTrigger asChild>
+                  <button
+                    className="mm-icon-control mm-chat-menu-trigger"
+                    aria-label="Open chats"
+                  >
+                    <Menu size={20} aria-hidden="true" />
+                  </button>
+                </DialogTrigger>
+                <DialogContent
+                  className="mm-chat-drawer"
+                  showCloseButton={false}
+                >
+                  <DialogTitle className="sr-only">Chats</DialogTitle>
+                  <DialogDescription className="sr-only">
+                    Start a new chat or pick up where you left off.
+                  </DialogDescription>
+                  {messengerLibrary}
+                </DialogContent>
+              </Dialog>
+            </HeaderSlot>
+            <HeaderSlot id="mm-header-trailing">
+              <button
+                className="mm-icon-control"
+                aria-label="New chat"
+                title="New chat"
+                disabled={busy || !hasMessages}
+                onClick={startNewChat}
+              >
+                <SquarePen size={19} aria-hidden="true" />
+              </button>
+            </HeaderSlot>
+          </>
+        )}
+        {messengerLibrary}
+
+        <main className="mm-bots-main" id="bots-content">
+          <Dialog
+            open={showEditor}
+            onOpenChange={(open) => {
+              if (!open && !save.isPending) {
+                setEditing(null);
+                save.reset();
+              }
+            }}
+          >
+            <DialogContent className="mm-bot-settings-dialog">
+              <DialogTitle>Bot settings</DialogTitle>
+              <DialogDescription>
+                Personalize your bot and connect the agent account on your
+                machine.
+              </DialogDescription>
+              <BotEditor
+                key={editing === "edit" ? bot?.id : "new"}
+                bot={editing === "edit" ? bot : undefined}
+                machines={machines.data ?? []}
+                busy={save.isPending}
+                error={save.error?.message}
+                onSave={(input) => void saveProfile(input)}
+                onCancel={() => {
+                  setEditing(null);
+                  save.reset();
+                }}
+              />
+              {editing === "edit" && (
+                <div className="mm-settings-links">
+                  <button
+                    className="mm-settings-new-bot"
+                    disabled={busy}
+                    onClick={() => {
+                      setEditing("new");
+                      save.reset();
+                    }}
+                  >
+                    Create another bot
+                  </button>
+                  <button
+                    className="mm-settings-new-bot mm-settings-delete-bot"
+                    disabled={busy || serverBusy}
+                    onClick={() => {
+                      setEditing(null);
+                      setConversationId(null);
+                      setConfirmDelete("bot");
+                    }}
+                  >
+                    Delete this bot
+                  </button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+          <div
+            className="mm-bot-messages"
+            aria-label="Conversation messages"
+            aria-busy={sending}
+          >
+            {bots.isPending ? (
+              <p className="mm-bot-loading" role="status">
+                Loading…
+              </p>
+            ) : conversation.isPending && conversationId ? (
+              <p className="mm-bot-loading" role="status">
+                Loading chat…
+              </p>
+            ) : conversation.error ? (
+              <p className="mm-bot-error" role="alert">
+                {conversation.error.message}
+              </p>
+            ) : !hasMessages ? null : (
+              <div className="mm-bot-message-list">
+                {messages.map((message) => (
+                  <article
+                    className={`mm-bot-message mm-bot-message-${message.role}`}
+                    key={message.id}
+                  >
+                    <span className="mm-bot-message-author">
+                      {message.role === "user"
+                        ? "You"
+                        : (bot?.name ?? "Assistant")}
+                    </span>
+                    <div>{message.content}</div>
+                  </article>
+                ))}
+                {optimistic &&
+                  !messages.some((m) => m.id === optimistic.id) && (
+                    <article className="mm-bot-message mm-bot-message-user">
+                      <span className="mm-bot-message-author">You</span>
+                      <div>{optimistic.content}</div>
+                    </article>
+                  )}
+                {(sending || serverBusy) && (
+                  <div className="mm-bot-thinking" role="status">
+                    <span />
+                    Thinking…
+                  </div>
+                )}
+                <div ref={endRef} />
+              </div>
+            )}
+          </div>
+          <div className="mm-bot-composer-wrap" ref={composerRef}>
+            {confirmDelete && (
+              <div
+                className="mm-bot-confirm"
+                role="region"
+                aria-label="Confirm deletion"
+              >
+                <p>
+                  Delete this{" "}
+                  {confirmDelete === "bot"
+                    ? "bot and all its saved chats"
+                    : "chat"}
+                  ?
+                </p>
+                <button
+                  className="mm-bot-button mm-bot-button-secondary"
+                  disabled={busy}
+                  onClick={() => setConfirmDelete(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="mm-bot-button"
+                  disabled={busy}
+                  onClick={() => void deleteSelection()}
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+            {localError && (
+              <div className="mm-bot-error" role="alert">
+                {localError}
+                <button
+                  aria-label="Dismiss error"
+                  onClick={() => setLocalError("")}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+            {!sending && !serverBusy && retry && (
+              <button
+                className="mm-bot-retry"
+                onClick={() => void submit(retry.content, retry.id)}
+              >
+                <RotateCcw size={13} />
+                Retry last message
+              </button>
+            )}
+            {bot && botMachine?.status !== "running" && (
+              <p className="mm-bot-offline">
+                Start this bot’s machine in{" "}
+                <Link href="/dashboard/machines">Machines</Link> to chat.
+              </p>
+            )}
+            <ChatComposer
+              draft={draft}
+              onChange={setDraft}
+              onSubmit={() => void submit(draft)}
+              sending={sending || serverBusy}
+              disabled={!!bot && botMachine?.status !== "running"}
+              label={bot ? `Message ${bot.name}` : "Message your bot"}
+              placeholder="Ask anything"
+            />
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="mm-bots-workspace">
@@ -577,7 +892,7 @@ export function BotsWorkspace() {
                       : "Your space to think"}
                     {bot && " · "}
                     {bot &&
-                      `${botMachine?.name ?? "Machine unavailable"} · ${botMachine?.status ?? "offline"}`}
+                      `${botMachine?.status === "running" ? "Ready" : "Offline"}`}
                   </small>
                 </span>
               </div>
@@ -625,7 +940,9 @@ export function BotsWorkspace() {
                   {conversation.error.message}
                 </p>
               ) : !messages.length && !optimistic ? (
-                <ChatWelcome onChoose={choosePrompt} />
+                <ChatWelcome>
+                  <ChatSuggestions onChoose={choosePrompt} layout="list" />
+                </ChatWelcome>
               ) : (
                 <div className="mm-bot-message-list">
                   {messages.map((message) => (

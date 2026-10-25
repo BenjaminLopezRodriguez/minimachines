@@ -7,8 +7,7 @@ RUN apt-get update \
   && corepack prepare pnpm@10.27.0 --activate \
   && npm install -g typescript tsx
 
-# Codex / OpenAI agent CLIs: install at runtime with user credentials.
-# Do not bake API keys into the image.
+RUN npm install -g @openai/codex
 
 RUN useradd --create-home --shell /bin/bash agent \
   && mkdir -p /workspace \

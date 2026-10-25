@@ -1,5 +1,11 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgTableCreator, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  pgTableCreator,
+  primaryKey,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 /**
  * Multi-project schema feature of Drizzle ORM — lets the same database
@@ -310,36 +316,57 @@ export const pushSubscriptions = createTable(
 );
 
 /** Bots is a separate conversation product; credentials stay on the selected machine. */
-export const bots = createTable("bot", (d) => ({
-  id: d.uuid().primaryKey().defaultRandom(),
-  ownerUserId: d.varchar({ length: 128 }).notNull(),
-  machineId: d.varchar({ length: 64 }).notNull(),
-  name: d.varchar({ length: 80 }).notNull(),
-  instructions: d.text().notNull(),
-  provider: d.varchar({ length: 16 }).notNull(),
-  createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
-  updatedAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
-}), (t) => [index("bot_owner_idx").on(t.ownerUserId)]);
+export const bots = createTable(
+  "bot",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    ownerUserId: d.varchar({ length: 128 }).notNull(),
+    machineId: d.varchar({ length: 64 }).notNull(),
+    name: d.varchar({ length: 80 }).notNull(),
+    instructions: d.text().notNull(),
+    provider: d.varchar({ length: 16 }).notNull(),
+    createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+    updatedAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+  }),
+  (t) => [index("bot_owner_idx").on(t.ownerUserId)],
+);
 
-export const botConversations = createTable("bot_conversation", (d) => ({
-  id: d.uuid().primaryKey().defaultRandom(),
-  botId: d.uuid().notNull().references(() => bots.id, { onDelete: "cascade" }),
-  ownerUserId: d.varchar({ length: 128 }).notNull(),
-  title: d.varchar({ length: 160 }).notNull().default("New conversation"),
-  generationId: d.uuid(),
-  generationStartedAt: d.timestamp({ withTimezone: true }),
-  createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
-  updatedAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
-}), (t) => [index("bot_conversation_owner_idx").on(t.ownerUserId, t.botId)]);
+export const botConversations = createTable(
+  "bot_conversation",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    botId: d
+      .uuid()
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    ownerUserId: d.varchar({ length: 128 }).notNull(),
+    title: d.varchar({ length: 160 }).notNull().default("New conversation"),
+    generationId: d.uuid(),
+    generationStartedAt: d.timestamp({ withTimezone: true }),
+    createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+    updatedAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+  }),
+  (t) => [index("bot_conversation_owner_idx").on(t.ownerUserId, t.botId)],
+);
 
-export const botMessages = createTable("bot_message", (d) => ({
-  id: d.uuid().primaryKey().defaultRandom(),
-  conversationId: d.uuid().notNull().references(() => botConversations.id, { onDelete: "cascade" }),
-  role: d.varchar({ length: 16 }).notNull(),
-  content: d.text().notNull(),
-  replyTo: d.uuid(),
-  createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
-}), (t) => [index("bot_message_conversation_idx").on(t.conversationId, t.createdAt), uniqueIndex("bot_message_reply_idx").on(t.replyTo)]);
+export const botMessages = createTable(
+  "bot_message",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    conversationId: d
+      .uuid()
+      .notNull()
+      .references(() => botConversations.id, { onDelete: "cascade" }),
+    role: d.varchar({ length: 16 }).notNull(),
+    content: d.text().notNull(),
+    replyTo: d.uuid(),
+    createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+  }),
+  (t) => [
+    index("bot_message_conversation_idx").on(t.conversationId, t.createdAt),
+    uniqueIndex("bot_message_reply_idx").on(t.replyTo),
+  ],
+);
 
 /**
  * A shared workspace: usually a git repo (`repoKey` = normalized origin, e.g.
@@ -360,7 +387,9 @@ export const projects = createTable(
   (t) => [
     uniqueIndex("project_owner_repo_idx").on(t.ownerUserId, t.repoKey),
     // Names repeat across repos (two repos called "app"); only repo-less projects are unique by name.
-    uniqueIndex("project_owner_named_idx").on(t.ownerUserId, t.name).where(sql`"repoKey" IS NULL`),
+    uniqueIndex("project_owner_named_idx")
+      .on(t.ownerUserId, t.name)
+      .where(sql`"repoKey" IS NULL`),
   ],
 );
 
@@ -424,7 +453,10 @@ export const projectInvites = createTable(
     uniqueIndex("project_invite_token_idx").on(t.tokenHash),
     index("project_invite_project_idx").on(t.projectId),
     index("project_invite_org_idx").on(t.orgId),
-    check("project_invite_one_target", sql`("projectId" IS NULL) <> ("orgId" IS NULL)`),
+    check(
+      "project_invite_one_target",
+      sql`("projectId" IS NULL) <> ("orgId" IS NULL)`,
+    ),
   ],
 );
 
@@ -452,7 +484,10 @@ export const organizationMembers = createTable(
       .$defaultFn(() => new Date())
       .notNull(),
   }),
-  (t) => [primaryKey({ columns: [t.orgId, t.userId] }), index("organization_member_user_idx").on(t.userId)],
+  (t) => [
+    primaryKey({ columns: [t.orgId, t.userId] }),
+    index("organization_member_user_idx").on(t.userId),
+  ],
 );
 
 /**
@@ -473,4 +508,65 @@ export const userSecrets = createTable(
       .notNull(),
   }),
   (t) => [primaryKey({ columns: [t.userId, t.name] })],
+);
+
+/** Private beta enrollment; raw project content is never copied into analytics. */
+export const betaApplications = createTable(
+  "beta_application",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    email: d.varchar({ length: 320 }).notNull(),
+    userId: d.varchar({ length: 128 }),
+    status: d.varchar({ length: 16 }).notNull().default("pending"),
+    verifiedAt: d.timestamp({ withTimezone: true }),
+    role: d.varchar({ length: 80 }),
+    useCase: d.varchar({ length: 1000 }),
+    cohort: d.varchar({ length: 80 }),
+    feedbackConsent: d.boolean().notNull().default(false),
+    reviewedBy: d.varchar({ length: 128 }),
+    reviewedAt: d.timestamp({ withTimezone: true }),
+    createdAt: d.timestamp({ withTimezone: true }).notNull().defaultNow(),
+  }),
+  (t) => [
+    uniqueIndex("beta_email_unique").on(t.email),
+    uniqueIndex("beta_user_unique").on(t.userId),
+    index("beta_status_idx").on(t.status),
+  ],
+);
+
+export const betaFeedback = createTable(
+  "beta_feedback",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    userId: d.varchar({ length: 128 }).notNull(),
+    kind: d.varchar({ length: 16 }).notNull(),
+    message: d.varchar({ length: 3000 }).notNull(),
+    rating: d.integer(),
+    surface: d.varchar({ length: 32 }).notNull(),
+    status: d.varchar({ length: 16 }).notNull().default("new"),
+    createdAt: d.timestamp({ withTimezone: true }).notNull().defaultNow(),
+  }),
+  (t) => [index("beta_feedback_created_idx").on(t.createdAt)],
+);
+
+/** Shared atomic buckets work across serverless instances. Identifiers are hashed. */
+export const requestBuckets = createTable(
+  "request_bucket",
+  (d) => ({
+    id: d.varchar({ length: 64 }).primaryKey(),
+    hits: d.integer().notNull(),
+    expiresAt: d.timestamp({ withTimezone: true }).notNull(),
+  }),
+  (t) => [index("request_bucket_expiry_idx").on(t.expiresAt)],
+);
+
+/** Provisioning reservations prevent concurrent requests bypassing compute caps. */
+export const computeReservations = createTable(
+  "compute_reservation",
+  (d) => ({
+    id: d.varchar({ length: 64 }).primaryKey(),
+    userId: d.varchar({ length: 128 }).notNull(),
+    expiresAt: d.timestamp({ withTimezone: true }).notNull(),
+  }),
+  (t) => [index("compute_reservation_user_idx").on(t.userId)],
 );

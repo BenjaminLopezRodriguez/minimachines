@@ -1,3 +1,5 @@
+import { RequestLimitError } from "~/server/lib/distributed-rate-limit";
+import { BetaAccessError } from "~/server/data/beta";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -36,10 +38,17 @@ export const machinesRouter = createTRPCRouter({
         task: z.string().min(1).max(200).optional(),
       }),
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
-        return createMachine({ ...input, ownerUserId: ctx.userId });
+        return await createMachine({ ...input, ownerUserId: ctx.userId });
       } catch (err) {
+        if (err instanceof RequestLimitError)
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: err.message,
+          });
+        if (err instanceof BetaAccessError)
+          throw new TRPCError({ code: "FORBIDDEN", message: err.message });
         const message = err instanceof Error ? err.message : "Create failed";
         if (message.startsWith("Unknown template")) {
           throw new TRPCError({ code: "NOT_FOUND", message });
@@ -57,7 +66,13 @@ export const machinesRouter = createTRPCRouter({
         id: z.string().min(1),
         cmd: z.string().min(1).max(4000),
         cwd: z.string().max(512).optional(),
-        checkpoint: z.object({ path: z.string().min(1).max(512), label: z.string().max(200).optional(), agent: z.string().max(64).optional() }).optional(),
+        checkpoint: z
+          .object({
+            path: z.string().min(1).max(512),
+            label: z.string().max(200).optional(),
+            agent: z.string().max(64).optional(),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -88,7 +103,11 @@ export const machinesRouter = createTRPCRouter({
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const m = await stopMachine(input.id, { ownerUserId: ctx.userId });
-      if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "Machine not found" });
+      if (!m)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Machine not found",
+        });
       return m;
     }),
 
@@ -96,7 +115,11 @@ export const machinesRouter = createTRPCRouter({
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const m = await restartMachine(input.id, { ownerUserId: ctx.userId });
-      if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "Machine not found" });
+      if (!m)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Machine not found",
+        });
       return m;
     }),
 
@@ -104,7 +127,11 @@ export const machinesRouter = createTRPCRouter({
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const ok = await deleteMachine(input.id, { ownerUserId: ctx.userId });
-      if (!ok) throw new TRPCError({ code: "NOT_FOUND", message: "Machine not found" });
+      if (!ok)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Machine not found",
+        });
       return { ok };
     }),
 

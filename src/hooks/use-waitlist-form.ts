@@ -16,12 +16,8 @@ export function useWaitlistForm() {
   });
 
   const joinWaitlist = api.waitlist.join.useMutation({
-    // Optimistic submission: show the success state immediately, then roll
-    // back and surface the error inline if the server rejects the request.
-    onMutate: () => {
-      setStatus("success");
-    },
     onSuccess: () => {
+      setStatus("success");
       form.reset();
     },
     onError: (error) => {

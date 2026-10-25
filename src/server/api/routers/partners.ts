@@ -1,9 +1,8 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { partnerRequests } from "~/server/db/schema";
-import { rateLimit } from "~/server/lib/rate-limit";
+import { enforceRateLimit } from "~/server/lib/distributed-rate-limit";
 
 export const partnersRouter = createTRPCRouter({
   // Public: agent-builders request being added to the platform.
@@ -27,14 +26,7 @@ export const partnersRouter = createTRPCRouter({
       if (input.website) return { id: undefined };
 
       const ip = ctx.headers.get("x-real-ip")?.trim() ?? "unknown";
-      if (
-        !rateLimit(`partners:${ip}`, { limit: 5, windowMs: 10 * 60_000 }).ok
-      ) {
-        throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "Too many attempts. Please try again in a few minutes.",
-        });
-      }
+      await enforceRateLimit(`partners:${ip}`, 5, 10 * 60_000);
 
       const [entry] = await ctx.db
         .insert(partnerRequests)

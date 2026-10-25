@@ -33,7 +33,11 @@ export async function getContact(
     .where(eq(pagerContacts.ownerUserId, ownerUserId))
     .limit(1);
   return row
-    ? { email: row.email ?? null, phone: row.phone ?? null, channels: row.channels }
+    ? {
+        email: row.email ?? null,
+        phone: row.phone ?? null,
+        channels: row.channels,
+      }
     : null;
 }
 
@@ -56,7 +60,29 @@ export async function setContact(input: {
     .onConflictDoUpdate({ target: pagerContacts.ownerUserId, set })
     .returning();
   if (!row) throw new Error("Failed to save pager contact");
-  return { email: row.email ?? null, phone: row.phone ?? null, channels: row.channels };
+  return {
+    email: row.email ?? null,
+    phone: row.phone ?? null,
+    channels: row.channels,
+  };
+}
+
+/** Default only to the identity provider's verified address; preserve explicit contacts. */
+export async function ensureEmailContact(user: {
+  id: string;
+  email: string;
+  emailVerified: boolean;
+}) {
+  if (!user.emailVerified) throw new Error("Verify your account email first.");
+  await db
+    .insert(pagerContacts)
+    .values({
+      ownerUserId: user.id,
+      email: user.email,
+      emailVerifiedAt: new Date(),
+      channels: "email",
+    })
+    .onConflictDoNothing();
 }
 
 /** Create a page + its single-use reply token. Returns the raw token (not stored). */
@@ -124,25 +150,30 @@ export async function submitReply(input: {
   body: string;
   model?: string;
 }): Promise<boolean> {
-  const [ev] = await db
-    .update(pagerEvents)
-    .set({ consumedAt: new Date() })
-    .where(
-      and(
-        eq(pagerEvents.tokenHash, hashToken(input.token)),
-        isNull(pagerEvents.consumedAt),
-      ),
-    )
-    .returning();
-  if (!ev || ev.expiresAt.getTime() < Date.now()) return false;
-  await db.insert(mailbox).values({
-    machineId: ev.machineId,
-    ownerUserId: ev.ownerUserId,
-    eventId: ev.id,
-    body: input.body,
-    model: input.model ?? null,
+  return db.transaction(async (tx) => {
+    const [ev] = await tx
+      .update(pagerEvents)
+      .set({ consumedAt: new Date() })
+      .where(
+        and(
+          eq(pagerEvents.tokenHash, hashToken(input.token)),
+          isNull(pagerEvents.consumedAt),
+          gte(pagerEvents.expiresAt, new Date()),
+        ),
+      )
+      .returning();
+    if (!ev) return false;
+    await tx
+      .insert(mailbox)
+      .values({
+        machineId: ev.machineId,
+        ownerUserId: ev.ownerUserId,
+        eventId: ev.id,
+        body: input.body,
+        model: input.model ?? null,
+      });
+    return true;
   });
-  return true;
 }
 
 export type Reply = {
@@ -263,7 +294,9 @@ export async function batonStatus(token: string): Promise<BatonStatus | null> {
   const [share] = await db
     .select({ slug: shares.slug })
     .from(shares)
-    .where(and(eq(shares.machineId, origin.machineId), eq(shares.enabled, true)))
+    .where(
+      and(eq(shares.machineId, origin.machineId), eq(shares.enabled, true)),
+    )
     .orderBy(desc(shares.createdAt))
     .limit(1);
   const [machine] = await db

@@ -4,6 +4,7 @@ import { test } from "node:test";
 
 import {
   batonStatus,
+  ensureEmailContact,
   createEvent,
   getContact,
   pollMailbox,
@@ -93,7 +94,10 @@ void test("baton status shows work after the reply and flips done", async () => 
 
 void test("baton status mirrors commands run after the reply", async () => {
   const owner = uid();
-  const machine = await createMachine({ templateId: "node-ts", ownerUserId: owner });
+  const machine = await createMachine({
+    templateId: "node-ts",
+    ownerUserId: owner,
+  });
   const { token } = await createEvent({
     machineId: machine.id,
     ownerUserId: owner,
@@ -104,7 +108,11 @@ void test("baton status mirrors commands run after the reply", async () => {
 
   assert.equal((await batonStatus(token))?.commands.length, 0);
 
-  await execMachine(machine.id, { cmd: "npm run build" }, { ownerUserId: owner });
+  await execMachine(
+    machine.id,
+    { cmd: "npm run build" },
+    { ownerUserId: owner },
+  );
   const status = await batonStatus(token);
   assert.equal(status?.commands.length, 1);
   assert.equal(status?.commands[0]?.cmd, "npm run build");
@@ -120,4 +128,46 @@ void test("contact upsert is idempotent", async () => {
   await setContact({ ownerUserId: owner, email: "a@x.com" });
   const c = await setContact({ ownerUserId: owner, email: "b@x.com" });
   assert.equal(c.email, "b@x.com");
+});
+
+void test("default baton address requires verification and preserves custom contacts", async () => {
+  const id = uid();
+  await assert.rejects(() =>
+    ensureEmailContact({
+      id,
+      email: "unverified@example.test",
+      emailVerified: false,
+    }),
+  );
+  assert.equal(await getContact(id), null);
+  await ensureEmailContact({
+    id,
+    email: "verified@example.test",
+    emailVerified: true,
+  });
+  assert.equal((await getContact(id))?.email, "verified@example.test");
+  await setContact({ ownerUserId: id, email: "custom@example.test" });
+  await ensureEmailContact({
+    id,
+    email: "verified@example.test",
+    emailVerified: true,
+  });
+  assert.equal((await getContact(id))?.email, "custom@example.test");
+});
+void test("concurrent baton replies deliver exactly once", async () => {
+  const owner = uid(),
+    machine = mid();
+  const { token } = await createEvent({
+    machineId: machine,
+    ownerUserId: owner,
+    kind: "question",
+    text: "Choose?",
+  });
+  const results = await Promise.all(
+    Array.from({ length: 12 }, (_, i) =>
+      submitReply({ token, body: String(i) }),
+    ),
+  );
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.equal((await pollMailbox(machine, owner)).length, 1);
 });

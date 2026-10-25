@@ -7,8 +7,7 @@ RUN apt-get update \
   && corepack prepare pnpm@10.27.0 --activate \
   && npm install -g typescript tsx
 
-# Claude Code / Anthropic CLIs: install at runtime with user credentials.
-# See https://docs.anthropic.com — do not bake API keys into the image.
+RUN npm install -g @anthropic-ai/claude-code
 
 RUN useradd --create-home --shell /bin/bash agent \
   && mkdir -p /workspace \

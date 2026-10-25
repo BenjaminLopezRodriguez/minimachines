@@ -1,3 +1,7 @@
+import {
+  enforceRateLimit,
+  RequestLimitError,
+} from "~/server/lib/distributed-rate-limit";
 import { z } from "zod";
 
 import { env } from "~/env";
@@ -39,6 +43,22 @@ export async function POST(request: Request, ctx: Ctx) {
     );
   }
 
+  try {
+    await enforceRateLimit(`baton-email:${auth.userId}`, 20, 60 * 60_000);
+  } catch (error) {
+    if (error instanceof RequestLimitError)
+      return new Response(
+        JSON.stringify({ error: "rate_limited", message: error.message }),
+        {
+          status: 429,
+          headers: {
+            "content-type": "application/json",
+            "Retry-After": String(error.retryAfter),
+          },
+        },
+      );
+    throw error;
+  }
   const contact = await getContact(auth.userId);
   const subs = await listSubscriptions(auth.userId);
   if (!contact?.email && subs.length === 0) {
@@ -70,7 +90,11 @@ export async function POST(request: Request, ctx: Ctx) {
       // Event is stored — only fail the request if email was the sole channel.
       console.error("[pager] email send failed; event kept", eventId, err);
       if (subs.length === 0) {
-        return jsonError("notify_send_failed", "Notification could not be sent", 502);
+        return jsonError(
+          "notify_send_failed",
+          "Notification could not be sent",
+          502,
+        );
       }
     }
   }

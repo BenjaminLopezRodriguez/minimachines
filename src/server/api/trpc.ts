@@ -12,6 +12,11 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 
 import { db } from "~/server/db";
+import { requireBetaAccess, BetaAccessError } from "~/server/data/beta";
+import {
+  enforceRateLimit,
+  RequestLimitError,
+} from "~/server/lib/distributed-rate-limit";
 
 /**
  * 1. CONTEXT
@@ -85,6 +90,18 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
   }
 
   const result = await next();
+  if (!result.ok && result.error.cause instanceof RequestLimitError)
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: result.error.cause.message,
+      cause: result.error.cause,
+    });
+  if (!result.ok && result.error.cause instanceof BetaAccessError)
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: result.error.cause.message,
+      cause: result.error.cause,
+    });
 
   const end = Date.now();
   console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
@@ -97,9 +114,26 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
  */
 export const publicProcedure = t.procedure.use(timingMiddleware);
 
-const enforceUser = t.middleware(({ ctx, next }) => {
+const enforceUser = t.middleware(async ({ ctx, next, type }) => {
   if (!ctx.userId) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  if (!ctx.user?.emailVerified)
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Verify your email through sign-in to continue.",
+    });
+  if (type === "mutation") {
+    try {
+      await enforceRateLimit(`mutation:${ctx.userId}`, 60, 60_000);
+    } catch (error) {
+      if (error instanceof RequestLimitError)
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: error.message,
+        });
+      throw error;
+    }
   }
   return next({
     ctx: {
@@ -110,6 +144,18 @@ const enforceUser = t.middleware(({ ctx, next }) => {
 });
 
 /** Requires a signed-in WorkOS user. */
-export const protectedProcedure = t.procedure
+export const authenticatedProcedure = t.procedure
   .use(timingMiddleware)
   .use(enforceUser);
+export const protectedProcedure = authenticatedProcedure.use(
+  async ({ ctx, next }) => {
+    try {
+      await requireBetaAccess(ctx.userId);
+    } catch (error) {
+      if (error instanceof BetaAccessError)
+        throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+      throw error;
+    }
+    return next();
+  },
+);

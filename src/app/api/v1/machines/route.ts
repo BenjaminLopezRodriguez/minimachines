@@ -1,3 +1,5 @@
+import { RequestLimitError } from "~/server/lib/distributed-rate-limit";
+import { BetaAccessError } from "~/server/data/beta";
 import { z } from "zod";
 
 import { isApiAuth, requireApiKey } from "~/server/api/v1/auth";
@@ -10,7 +12,10 @@ export async function GET(request: Request) {
   const auth = await requireApiKey(request);
   if (!isApiAuth(auth)) return auth;
   return jsonOk({
-    machines: await listMachines({ ownerUserId: auth.userId, keyId: auth.keyId }),
+    machines: await listMachines({
+      ownerUserId: auth.userId,
+      keyId: auth.keyId,
+    }),
   });
 }
 
@@ -60,6 +65,13 @@ export async function POST(request: Request) {
     });
     return jsonOk({ machine }, 201);
   } catch (err) {
+    if (err instanceof RequestLimitError) {
+      const response = jsonError("rate_limit", err.message, 429);
+      response.headers.set("Retry-After", String(err.retryAfter));
+      return response;
+    }
+    if (err instanceof BetaAccessError)
+      return jsonError("beta_access_required", err.message, 403);
     const message = err instanceof Error ? err.message : "Create failed";
     if (message.startsWith("Unknown template")) {
       return jsonError("unknown_template", message, 404);

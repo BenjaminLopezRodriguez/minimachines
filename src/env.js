@@ -8,6 +8,23 @@ export const env = createEnv({
    */
   server: {
     DATABASE_URL: z.string().url(),
+    BETA_GATE_ENABLED: z.enum(["true", "false"]).default("false"),
+    BETA_ADMIN_USER_IDS: z.string().optional(),
+    BETA_MAX_MACHINE_CPU: z.coerce.number().int().min(1).max(16).default(4),
+    BETA_MAX_MACHINE_MEMORY_GB: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(64)
+      .default(8),
+    BETA_MAX_ACTIVE_MACHINES: z.coerce.number().int().min(1).max(10).default(2),
+    BETA_MAX_MACHINE_CREATES_PER_DAY: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(5),
+    COMPUTE_ENABLED: z.enum(["true", "false"]).default("true"),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -60,6 +77,14 @@ export const env = createEnv({
    */
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,
+    BETA_GATE_ENABLED: process.env.BETA_GATE_ENABLED,
+    BETA_ADMIN_USER_IDS: process.env.BETA_ADMIN_USER_IDS,
+    BETA_MAX_ACTIVE_MACHINES: process.env.BETA_MAX_ACTIVE_MACHINES,
+    BETA_MAX_MACHINE_CPU: process.env.BETA_MAX_MACHINE_CPU,
+    BETA_MAX_MACHINE_MEMORY_GB: process.env.BETA_MAX_MACHINE_MEMORY_GB,
+    BETA_MAX_MACHINE_CREATES_PER_DAY:
+      process.env.BETA_MAX_MACHINE_CREATES_PER_DAY,
+    COMPUTE_ENABLED: process.env.COMPUTE_ENABLED,
     NODE_ENV: process.env.NODE_ENV,
     MODAL_TOKEN_ID: process.env.MODAL_TOKEN_ID,
     MODAL_TOKEN_SECRET: process.env.MODAL_TOKEN_SECRET,

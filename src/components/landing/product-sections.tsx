@@ -164,8 +164,8 @@ export function ProductSections() {
           </h2>
           <p>Give it a little room.</p>
         </div>
-        <Link className="mm-gloss mm-gloss-primary" href="/install">
-          Let’s get started <ArrowRight size={17} aria-hidden="true" />
+        <Link className="mm-gloss mm-gloss-primary" href="/early-access">
+          Join the beta <ArrowRight size={17} aria-hidden="true" />
         </Link>
       </section>
     </>

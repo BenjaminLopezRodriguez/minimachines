@@ -1,3 +1,4 @@
+import { requireBetaAccess, BetaAccessError } from "~/server/data/beta";
 import { PageSwitcher } from "~/components/dashboard/page-switcher";
 import { BrandMark } from "~/components/brand-mark";
 import { ThemeToggle } from "~/components/theme-toggle";
@@ -18,6 +19,13 @@ export default async function BotsLayout({
 }) {
   const { user } = await withAuth();
   if (!user) redirect("/sign-in");
+  if (!user.emailVerified) redirect("/beta");
+  try {
+    await requireBetaAccess(user.id);
+  } catch (error) {
+    if (error instanceof BetaAccessError) redirect("/beta");
+    throw error;
+  }
   return (
     <AuthKitProvider>
       <div className="mm-bots-app">

@@ -1,5 +1,6 @@
 "use client";
 
+import { trackProduct } from "~/lib/analytics";
 import { CaptureUpdateAction, Excalidraw } from "@excalidraw/excalidraw";
 import type {
   ExcalidrawImperativeAPI,
@@ -11,6 +12,7 @@ import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   appendFrame,
+  sceneFingerprint,
   onionLayers,
   readCanvas,
   writeCanvas,
@@ -35,6 +37,8 @@ export function BlankCanvas({ owner }: { owner: string }) {
   } | null>(null);
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
   const browsing = useRef(false);
+  const editedEvent = useRef(false);
+  const lastEditSignature = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(false);
   const writeQueue = useRef(Promise.resolve());
@@ -147,6 +151,17 @@ export function BlankCanvas({ owner }: { owner: string }) {
         elements.some((element) => element.id.startsWith("onion-"))
       )
         return;
+      const signature = sceneFingerprint(elements);
+      if (
+        lastEditSignature.current !== null &&
+        lastEditSignature.current !== signature &&
+        !editedEvent.current &&
+        elements.some((element) => !element.isDeleted)
+      ) {
+        editedEvent.current = true;
+        trackProduct("whiteboard_edited", "whiteboard");
+      }
+      lastEditSignature.current = signature;
       live.current = {
         elements,
         files,
@@ -185,6 +200,8 @@ export function BlankCanvas({ owner }: { owner: string }) {
         returnToPresent();
         return;
       }
+      if (!browsing.current)
+        trackProduct("whiteboard_history_browsed", "whiteboard");
       browsing.current = true;
       setPosition(chosen);
       api.current.updateScene({
@@ -220,6 +237,7 @@ export function BlankCanvas({ owner }: { owner: string }) {
     };
     returnToPresent();
     capture();
+    trackProduct("whiteboard_edit_restored", "whiteboard");
   };
   if (!archive)
     return (
