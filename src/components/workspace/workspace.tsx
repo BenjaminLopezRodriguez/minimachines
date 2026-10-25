@@ -134,6 +134,8 @@ export function Workspace(props: {
   refreshToken: () => Promise<string>;
   /** Server has project file storage: images on the whiteboard and binary files in the tree. */
   storage: boolean;
+  /** `?view=board` (e.g. from the TUI's whiteboard mode) opens straight on the whiteboard. */
+  initialView?: "code" | "board";
 }) {
   const { access, project, machine } = props;
   const readOnly = access.role === "viewer";
@@ -160,7 +162,7 @@ export function Workspace(props: {
   const [peers, setPeers] = useState<Peer[]>([]);
   const [previewKey, setPreviewKey] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [view, setView] = useState<"code" | "board">("code");
+  const [view, setView] = useState<"code" | "board">(props.initialView ?? "code");
   const editorEl = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

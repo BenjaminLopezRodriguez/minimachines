@@ -11,7 +11,9 @@ import { basename } from "node:path";
 import { Box, render, Text, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useState } from "react";
 
+import { BotMode } from "./bot-mode.js";
 import { gitAuthors, repoKeyFromRemote } from "./people.js";
+import { WhiteboardMode } from "./whiteboard-mode.js";
 
 type Api = (method: string, path: string, body?: unknown) => Promise<Response>;
 export type TuiDeps = {
@@ -20,6 +22,9 @@ export type TuiDeps = {
   /** Hand the terminal to `mm code` (local unless a machine id is given), optionally with a first task. */
   code: (machineId?: string, prompt?: string) => Promise<void>;
   info: { version: string; host: string; model: string };
+  openInViewer: (url: string) => Promise<"viewer" | "browser">;
+  configDir: string;
+  baseUrl: string;
 };
 
 export const TABS = ["machines", "shares", "people"] as const;
@@ -39,6 +44,8 @@ type Badge = { text: string; color: string };
 type Item = { key: string; title: string; badge?: Badge; fields: [string, string][]; raw: Machine | Share | Person };
 
 export const COMMANDS: [string, string][] = [
+  ["/bot", "your pet: chat with it and it works in this folder"],
+  ["/board", "the project whiteboard: cards, agents, open the canvas"],
   ["/machines", "machine dashboard"],
   ["/shares", "share links"],
   ["/people", "invite people to this project"],
@@ -57,7 +64,7 @@ export type Mode =
   | { kind: "prompt"; purpose: "exec" | "create" | "invite"; label: string; value: string }
   | { kind: "confirm"; purpose: "stop" | "revoke-share" | "remove-person" | "invite"; label: string; payload: string };
 
-export type State = { view: "home" | "dash"; input: string; pick: number; tab: Tab; index: number; filter: string; mode: Mode };
+export type State = { view: "home" | "dash" | "bot" | "board"; input: string; pick: number; tab: Tab; index: number; filter: string; mode: Mode };
 export type Key = { input: string; upArrow?: boolean; downArrow?: boolean; leftArrow?: boolean; rightArrow?: boolean; tab?: boolean; return?: boolean; escape?: boolean; backspace?: boolean; delete?: boolean; ctrl?: boolean; meta?: boolean };
 
 export const initialState: State = { view: "home", input: "", pick: 0, tab: "machines", index: 0, filter: "", mode: { kind: "list" } };
@@ -73,6 +80,7 @@ const typed = (k: Key) => (k.ctrl || k.meta || !k.input || /[\x00-\x1f]/.test(k.
 /** Returns the next state and, at most, one named action for the component to run. */
 export function reduce(s: State, k: Key, count: number): { state: State; action?: string } {
   const m = s.mode;
+  if (s.view === "bot" || s.view === "board") return { state: s }; // those screens read their own keys
   if (m.kind === "help") return { state: { ...s, mode: { kind: "list" } } }; // any key closes help
 
   if (s.view === "home") {
@@ -255,7 +263,7 @@ function InputBox({ prefix, value, placeholder, focus = true }: { prefix: string
 }
 
 const HELP: [string, [string, string][]][] = [
-  ["Home", [["type", "a task for the coding agent"], ["/", "commands"], ["tab", "dashboard"], ["esc", "clear"], ["ctrl+c", "quit"]]],
+  ["Home", [["type", "a task for the coding agent"], ["/", "commands"], ["/bot", "your pet"], ["/board", "whiteboard"], ["tab", "dashboard"], ["esc", "clear"], ["ctrl+c", "quit"]]],
   ["Dashboard", [["j k ↑ ↓", "move"], ["h l ← → tab", "switch tab"], ["enter", "open console / link"], ["/", "filter"], ["r", "refresh"], ["esc", "home"], ["q", "quit"]]],
   ["Machines", [["n", "new"], ["x", "run a command"], ["o", "open app"], ["c", "coding agent on it"], ["s", "stop"]]],
   ["Shares · People", [["d", "revoke link"], ["+", "invite"], ["-", "revoke / remove"]]],
@@ -338,6 +346,8 @@ function App({ deps, exit }: { deps: TuiDeps; exit: (after?: () => Promise<void>
       const [cmd, ...args] = rest.split(" ");
       const tab = cmd?.slice(1) as Tab;
       if (TABS.includes(tab)) return setState((s) => ({ ...s, view: "dash", tab, index: 0 }));
+      if (cmd === "/bot") return setState((s) => ({ ...s, view: "bot" }));
+      if (cmd === "/board") return setState((s) => ({ ...s, view: "board" }));
       if (cmd === "/new") return setState((s) => ({ ...s, view: "dash", tab: "machines", mode: { kind: "prompt", purpose: "create", label: "template", value: "node-ts" } }));
       if (cmd === "/code") return exit(() => deps.code(args[0]));
       if (cmd === "/help") return setState((s) => ({ ...s, mode: { kind: "help" } }));
@@ -401,11 +411,14 @@ function App({ deps, exit }: { deps: TuiDeps; exit: (after?: () => Promise<void>
     }
   };
 
-  useInput((input, key) => {
-    const { state: next, action } = reduce(state, { input, ...key }, items.length);
-    setState(next);
-    if (action) void act(action);
-  });
+  useInput(
+    (input, key) => {
+      const { state: next, action } = reduce(state, { input, ...key }, items.length);
+      setState(next);
+      if (action) void act(action);
+    },
+    { isActive: state.view === "home" || state.view === "dash" },
+  );
 
   const cwd = process.cwd().replace(homedir(), "~");
   const footer = (
@@ -416,6 +429,9 @@ function App({ deps, exit }: { deps: TuiDeps; exit: (after?: () => Promise<void>
   );
 
   if (state.mode.kind === "help") return <Help />;
+  const goHome = () => setState((s) => ({ ...s, view: "home", input: "" }));
+  if (state.view === "bot") return <BotMode api={deps.api} configDir={deps.configDir} onExit={goHome} width={width} height={height} />;
+  if (state.view === "board") return <WhiteboardMode api={deps.api} baseUrl={deps.baseUrl} openInViewer={deps.openInViewer} onExit={goHome} width={width} height={height} />;
 
   if (state.view === "home") {
     const matches = paletteMatches(state.input);
@@ -425,7 +441,7 @@ function App({ deps, exit }: { deps: TuiDeps; exit: (after?: () => Promise<void>
           <Logo width={width} />
           <Text dimColor>{`v${deps.info.version} · remote machines for your agents`}</Text>
           <Box flexDirection="column" marginTop={1} display={matches.length ? "none" : "flex"}>
-            {COMMANDS.slice(0, 5).map(([c, d]) => (
+            {COMMANDS.slice(0, 6).map(([c, d]) => (
               <Text key={c}><Text color={BRAND}>{c.padEnd(11)}</Text><Text dimColor>{d}</Text></Text>
             ))}
           </Box>
@@ -566,7 +582,13 @@ function selfCheck() {
   check(s.input === "/people ", "tab completes the command");
   check(step(k("", { return: true })) === "cmd:/people", "enter runs it");
   step(k("/")); step(k("", { downArrow: true }));
-  check(step(k("", { return: true })) === "cmd:/shares", "arrows pick from the palette");
+  check(step(k("", { return: true })) === "cmd:/board", "arrows pick from the palette");
+  step(k("/")); step(k("b"));
+  check(paletteMatches(s.input).length === 2, "/b offers bot and board");
+  check(step(k("", { return: true })) === "cmd:/bot", "enter takes the first match");
+  s = { ...s, view: "bot" };
+  check(reduce(s, k("q"), 3).action === undefined && reduce(s, k("q"), 3).state === s, "bot mode owns its keys (q doesn't quit)");
+  s = { ...s, view: "home", input: "" };
   step(k("/")); step(k("c")); step(k("o")); step(k("d")); step(k("e")); step(k(" ")); step(k("v")); step(k("m"));
   check(step(k("", { return: true })) === "cmd:/code vm", "command arguments pass through");
   step(k("x")); step(k("", { escape: true }));

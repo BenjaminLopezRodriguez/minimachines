@@ -618,17 +618,22 @@ function findViewer(): { cmd: string; args: string[] } | null {
   }
 }
 
-async function view(target?: string) {
-  const url = await viewTarget(target);
+/** Open a URL in the desktop viewer, or the browser when it isn't installed. Silent, for the TUI too. */
+async function openInViewer(url: string): Promise<"viewer" | "browser"> {
   const viewer = findViewer();
   if (!viewer) {
-    console.log(`${url}\n(viewer not installed — opening your browser; install it from packages/viewer: pnpm dist)`);
     await openUrl(url);
-    return;
+    return "browser";
   }
   // Detached: the window outlives this command; a second `mm view` reuses it.
   spawn(viewer.cmd, [...viewer.args, `--url=${url}`], { detached: true, stdio: "ignore" }).unref();
-  console.log(`viewing ${url}`);
+  return "viewer";
+}
+
+async function view(target?: string) {
+  const url = await viewTarget(target);
+  const where = await openInViewer(url);
+  console.log(where === "viewer" ? `viewing ${url}` : `${url}\n(viewer not installed — opened your browser; install it from packages/viewer: pnpm dist)`);
 }
 
 const mpath = (id: string, tail = "") =>
@@ -881,6 +886,9 @@ async function main() {
         [...(machineId ? ["--machine", machineId] : []), ...(prompt ? ["--initial", prompt] : [])],
         { api: apiOrThrow },
       ),
+    openInViewer,
+    configDir: configDir(),
+    baseUrl: baseUrl(),
     info: {
       version: (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version,
       host: new URL(baseUrl()).host,

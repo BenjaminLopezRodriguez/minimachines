@@ -31,7 +31,13 @@ function Notice({ title, body }: { title: string; body: string }) {
   );
 }
 
-export default async function ProjectWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProjectWorkspacePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string }>;
+}) {
   // Gate lives in middleware — read-only withAuth here.
   const { user } = await withAuth();
   const { id } = await params;
@@ -52,6 +58,7 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
       machine={machine ? { id: machine.id, name: machine.name, status: machine.status, appUrl: machine.appUrl ?? null, consoleUrl: machine.emulatorUrl ?? null } : null}
       refreshToken={refreshToken.bind(null, id)}
       storage={blobEnabled()}
+      initialView={(await searchParams).view === "board" ? "board" : "code"}
     />
   );
 }
