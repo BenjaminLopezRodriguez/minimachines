@@ -24,6 +24,8 @@ import type { ExcalidrawElement, FileId, OrderedExcalidrawElement } from "@excal
 import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
 import type { AppState, BinaryFiles, Collaborator, DataURL, ExcalidrawImperativeAPI, SocketId } from "@excalidraw/excalidraw/types";
 import { Bot, ExternalLink, ListTodo, Rocket, Trash2, X } from "lucide-react";
+
+import { uiKit } from "./ui-kit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
@@ -67,7 +69,22 @@ type FileMeta = { sha: string; mimeType: string; created: number };
  * `files` is where images live: `${files}?type=` to upload (POST, raw bytes → { sha }),
  * `${files}/<sha>` to read. Null when the server has no file storage (images stay off).
  */
-export function Board({ doc, awareness, readOnly, me, files }: { doc: Y.Doc; awareness: Awareness; readOnly: boolean; me: string; files: string | null }) {
+export function Board({
+  doc,
+  awareness,
+  readOnly,
+  me,
+  files,
+  canvasFirst = false,
+}: {
+  doc: Y.Doc;
+  awareness: Awareness;
+  readOnly: boolean;
+  me: string;
+  files: string | null;
+  /** Opened for sketching (e.g. from the TUI): tasks panel tucked away, UI kit library open. */
+  canvasFirst?: boolean;
+}) {
   const canvas = useMemo(() => doc.getMap<OrderedExcalidrawElement>("canvas"), [doc]);
   // Image bytes are in project file storage (Vercel Blob); the room only records which blob each image is.
   const canvasFiles = useMemo(() => doc.getMap<FileMeta>("canvas-files"), [doc]);
@@ -79,7 +96,7 @@ export function Board({ doc, awareness, readOnly, me, files }: { doc: Y.Doc; awa
   const [ready, setReady] = useState(false);
   const [cards, setCards] = useState<Card[]>([]);
   const [selectedCount, setSelectedCount] = useState(0);
-  const [panel, setPanel] = useState(true);
+  const [panel, setPanel] = useState(!canvasFirst);
   const [openId, setOpenId] = useState<string | null>(null);
   const theme = useSiteTheme();
   // Last version of each element this tab has seen, from either side, so unchanged elements aren't re-sent.
@@ -309,7 +326,12 @@ export function Board({ doc, awareness, readOnly, me, files }: { doc: Y.Doc; awa
           initialData={() => {
             const elements = [...canvas.values()];
             for (const el of elements) seen.current.set(el.id, el.version);
-            return { elements, scrollToContent: elements.length > 0 };
+            return {
+              elements,
+              scrollToContent: elements.length > 0,
+              libraryItems: uiKit(),
+              ...(canvasFirst && !readOnly ? { appState: { openSidebar: { name: "default", tab: "library" } } } : {}),
+            };
           }}
           onChange={onChange}
           onPointerUpdate={onPointerUpdate}

@@ -136,6 +136,8 @@ export function Workspace(props: {
   storage: boolean;
   /** `?view=board` (e.g. from the TUI's whiteboard mode) opens straight on the whiteboard. */
   initialView?: "code" | "board";
+  /** `&canvas=1`: open the whiteboard canvas-first (sketching UI and ideas). */
+  canvasFirst?: boolean;
 }) {
   const { access, project, machine } = props;
   const readOnly = access.role === "viewer";
@@ -289,7 +291,7 @@ export function Workspace(props: {
       </header>
 
       {view === "board" ? (
-        <Board doc={doc} awareness={provider.awareness} readOnly={readOnly} me={props.me.name} files={props.storage ? `/p/${project.id}/blobs` : null} />
+        <Board doc={doc} awareness={provider.awareness} readOnly={readOnly} me={props.me.name} files={props.storage ? `/p/${project.id}/blobs` : null} canvasFirst={props.canvasFirst} />
       ) : (
       <div className="flex min-h-0 flex-1">
         <aside className="hidden w-60 shrink-0 flex-col border-r md:flex">

@@ -17,12 +17,15 @@ const LABEL: Record<Column, string> = { ideas: "Ideas", ready: "Ready", working:
 // Same status colors as the canvas, so a card reads the same in both places.
 const COLOR: Record<Column, string> = { ideas: "gray", ready: "#3558f5", working: "#f08c00", review: "#9c36b5", live: "#2f9e44" };
 
+/** Canvas-first: straight onto the whiteboard, tasks panel tucked away. */
+const canvasLink = (base: string, id: string) => `${base}/p/${id}?view=board&canvas=1`;
+
 type Prompt = { kind: "new"; value: string } | { kind: "delete"; id: string } | null;
 
 export function WhiteboardMode(props: {
   api: Api;
   baseUrl: string;
-  openInViewer: (url: string) => Promise<"viewer" | "browser">;
+  openInViewer: (url: string, window?: string) => Promise<"viewer" | "browser">;
   onExit: () => void;
   width: number;
   height: number;
@@ -49,6 +52,8 @@ export function WhiteboardMode(props: {
         provider = conn.provider;
         setProject({ id, role: conn.access.role });
         setStatus("live");
+        // The canvas is the main event: pop it open in its own window as soon as we know the project.
+        void props.openInViewer(canvasLink(props.baseUrl, id), "whiteboard").then((w) => setStatus(w === "viewer" ? "canvas open in the viewer" : "canvas open in your browser"));
         const update = () => setCards([...cardsOf(doc).values()].map(read).sort((a, b) => a.order - b.order));
         update();
         cardsOf(doc).observeDeep(update);
@@ -78,7 +83,7 @@ export function WhiteboardMode(props: {
   const column = COLUMNS[col]!;
   const sel = byCol[col]?.[Math.min(row, (byCol[col]?.length ?? 1) - 1)];
   const readOnly = project?.role === "viewer";
-  const canvasUrl = project ? `${props.baseUrl}/p/${project.id}?view=board` : null;
+  const canvasUrl = project ? canvasLink(props.baseUrl, project.id) : null;
 
   useInput((input, key) => {
     if (prompt?.kind === "new") {
@@ -106,7 +111,7 @@ export function WhiteboardMode(props: {
     if (key.downArrow || input === "j") return setRow((r) => Math.min(r + 1, Math.max(0, (byCol[col]?.length ?? 1) - 1)));
     if (key.upArrow || input === "k") return setRow((r) => Math.max(0, r - 1));
     if ((input === "o" || key.return) && canvasUrl) {
-      void props.openInViewer(canvasUrl).then((w) => setStatus(`opened the canvas in ${w === "viewer" ? "the viewer" : "your browser"}`));
+      void props.openInViewer(canvasUrl, "whiteboard").then((w) => setStatus(`opened the canvas in ${w === "viewer" ? "the viewer" : "your browser"}`));
       return;
     }
     if (readOnly) return setStatus("view only");

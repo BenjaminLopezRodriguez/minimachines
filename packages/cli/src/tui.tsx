@@ -22,7 +22,7 @@ export type TuiDeps = {
   /** Hand the terminal to `mm code` (local unless a machine id is given), optionally with a first task. */
   code: (machineId?: string, prompt?: string) => Promise<void>;
   info: { version: string; host: string; model: string };
-  openInViewer: (url: string) => Promise<"viewer" | "browser">;
+  openInViewer: (url: string, window?: string) => Promise<"viewer" | "browser">;
   configDir: string;
   baseUrl: string;
 };
@@ -293,11 +293,11 @@ const TAB_HINTS: Record<Tab, [string, string][]> = {
 
 // --- app --------------------------------------------------------------------
 
-function App({ deps, exit }: { deps: TuiDeps; exit: (after?: () => Promise<void>) => void }) {
+function App({ deps, exit, startView }: { deps: TuiDeps; exit: (after?: () => Promise<void>) => void; startView?: State["view"] }) {
   const { stdout } = useStdout();
   const width = stdout.columns || 80; // a pty can report 0
   const height = stdout.rows || 24;
-  const [state, setState] = useState<State>(initialState);
+  const [state, setState] = useState<State>({ ...initialState, view: startView ?? "home" });
   const [data, setData] = useState<{ items: Item[]; projectId?: string; note?: string }>({ items: [] });
   const [status, setStatus] = useState("loading…");
   const [output, setOutput] = useState<Record<string, string>>({});
@@ -430,7 +430,7 @@ function App({ deps, exit }: { deps: TuiDeps; exit: (after?: () => Promise<void>
 
   if (state.mode.kind === "help") return <Help />;
   const goHome = () => setState((s) => ({ ...s, view: "home", input: "" }));
-  if (state.view === "bot") return <BotMode api={deps.api} configDir={deps.configDir} onExit={goHome} width={width} height={height} />;
+  if (state.view === "bot") return <BotMode api={deps.api} configDir={deps.configDir} openInViewer={deps.openInViewer} onExit={goHome} width={width} height={height} />;
   if (state.view === "board") return <WhiteboardMode api={deps.api} baseUrl={deps.baseUrl} openInViewer={deps.openInViewer} onExit={goHome} width={width} height={height} />;
 
   if (state.view === "home") {
@@ -555,7 +555,8 @@ export async function tuiCommand(argv: string[], deps: TuiDeps) {
     return;
   }
   let after: (() => Promise<void>) | undefined;
-  const app = render(<App deps={deps} exit={(fn) => { after = fn; app.unmount(); }} />);
+  const startView = argv.includes("--bot") ? "bot" : argv.includes("--board") ? "board" : undefined;
+  const app = render(<App deps={deps} startView={startView} exit={(fn) => { after = fn; app.unmount(); }} />);
   await app.waitUntilExit();
   if (after) await after(); // hand the terminal to `mm code`
 }

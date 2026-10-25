@@ -36,11 +36,12 @@ export default async function ProjectWorkspacePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; canvas?: string }>;
 }) {
   // Gate lives in middleware — read-only withAuth here.
   const { user } = await withAuth();
   const { id } = await params;
+  const query = await searchParams;
   const role = user?.id && /^[0-9a-f-]{36}$/.test(id) ? await getRole(id, user.id) : null;
   if (!user?.id || !role) {
     return <Notice title="You're not in this project" body="Ask the owner to invite you; the invite link signs you in and brings you here." />;
@@ -58,7 +59,8 @@ export default async function ProjectWorkspacePage({
       machine={machine ? { id: machine.id, name: machine.name, status: machine.status, appUrl: machine.appUrl ?? null, consoleUrl: machine.emulatorUrl ?? null } : null}
       refreshToken={refreshToken.bind(null, id)}
       storage={blobEnabled()}
-      initialView={(await searchParams).view === "board" ? "board" : "code"}
+      initialView={query.view === "board" ? "board" : "code"}
+      canvasFirst={query.view === "board" && query.canvas === "1"}
     />
   );
 }

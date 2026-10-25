@@ -56,6 +56,8 @@ function usage(exitCode = 1): never {
   const print = exitCode === 0 ? console.log : console.error;
   print(`Usage:
   mm                       open the TUI (machines · shares · people); press ? for keys
+  mm bot                   Byte, your pixel pet: chat with it and it works in this folder (terminal + window)
+  mm whiteboard            this project's whiteboard: cards in the terminal, the canvas in a window
   mm --no-tui              agents: same data as NDJSON, never interactive. Add --no-tui to any command.
   minimachines skill install [--agent claude|codex|cursor] [--dir <path>] [--print]
   minimachines create <templateId> [--json]
@@ -619,14 +621,14 @@ function findViewer(): { cmd: string; args: string[] } | null {
 }
 
 /** Open a URL in the desktop viewer, or the browser when it isn't installed. Silent, for the TUI too. */
-async function openInViewer(url: string): Promise<"viewer" | "browser"> {
+async function openInViewer(url: string, window = "app"): Promise<"viewer" | "browser"> {
   const viewer = findViewer();
   if (!viewer) {
     await openUrl(url);
     return "browser";
   }
-  // Detached: the window outlives this command; a second `mm view` reuses it.
-  spawn(viewer.cmd, [...viewer.args, `--url=${url}`], { detached: true, stdio: "ignore" }).unref();
+  // Detached: the window outlives this command. One window per name (app, whiteboard, bot), each reused.
+  spawn(viewer.cmd, [...viewer.args, `--url=${url}`, `--window=${window}`], { detached: true, stdio: "ignore" }).unref();
   return "viewer";
 }
 
@@ -969,6 +971,12 @@ async function main() {
     await codeCommand(args.slice(1), { api: apiOrThrow });
     return;
   }
+  if (cmd === "bot" || cmd === "whiteboard") {
+    // Straight into a TUI mode; each also opens its desktop window.
+    const { tuiCommand } = await import("./tui.js");
+    await tuiCommand([cmd === "bot" ? "--bot" : "--board"], tuiDeps());
+    return;
+  }
   if (cmd === "tui") {
     const { tuiCommand } = await import("./tui.js");
     await tuiCommand(agent ? ["--json", ...args.slice(1)] : args.slice(1), tuiDeps());
@@ -1114,7 +1122,7 @@ async function main() {
   // user on an older CLI learns to upgrade instead of re-reading usage.
   const known = [
     "run", "agent", "login", "logout", "whoami", "pager", "share",
-    "create", "exec", "put", "ask", "say", "stop", "skill", "people", "code", "tui", "view", "up", "sync", "join", "board",
+    "create", "exec", "put", "ask", "say", "stop", "skill", "people", "code", "tui", "view", "up", "sync", "join", "board", "bot", "whiteboard",
   ];
   if (cmd && !known.includes(cmd)) {
     console.error(
