@@ -59,6 +59,8 @@ export const env = createEnv({
     // Web Push (VAPID). Unset → push is a no-op; email still works.
     VAPID_PRIVATE_KEY: z.string().optional(),
     VAPID_SUBJECT: z.string().optional(),
+    // DeepSeek powers the built-in chat assistant. Unset → only connected agents reply.
+    DEEPSEEK_API_KEY: z.string().optional(),
   },
 
   /**
@@ -102,6 +104,7 @@ export const env = createEnv({
     SYNC_SECRET: process.env.SYNC_SECRET,
     VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
     VAPID_SUBJECT: process.env.VAPID_SUBJECT,
+    DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY,
     NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
     WORKOS_API_KEY: process.env.WORKOS_API_KEY,
     WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID,

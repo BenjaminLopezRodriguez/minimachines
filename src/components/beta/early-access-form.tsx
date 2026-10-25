@@ -5,7 +5,6 @@ import { useState } from "react";
 import { api } from "~/trpc/react";
 export function EarlyAccessForm() {
   const [email, setEmail] = useState("");
-  const [consent, setConsent] = useState(false);
   const join = api.waitlist.join.useMutation({
     onSuccess: () => trackProduct("early_access_joined"),
   });
@@ -33,7 +32,7 @@ export function EarlyAccessForm() {
         const form = new FormData(e.currentTarget);
         join.mutate({
           email,
-          feedbackConsent: consent,
+          feedbackConsent: false,
           website:
             typeof form.get("website") === "string"
               ? (form.get("website") as string)
@@ -47,6 +46,10 @@ export function EarlyAccessForm() {
         id="early-email"
         type="email"
         autoComplete="email"
+        inputMode="email"
+        autoCapitalize="none"
+        spellCheck={false}
+        enterKeyHint="go"
         required
         maxLength={320}
         value={email}
@@ -61,14 +64,6 @@ export function EarlyAccessForm() {
         autoComplete="off"
         aria-hidden="true"
       />
-      <label className="mm-beta-check">
-        <input
-          type="checkbox"
-          checked={consent}
-          onChange={(e) => setConsent(e.target.checked)}
-        />
-        I’m open to a short feedback conversation while testing.
-      </label>
       {join.error && (
         <p className="mm-beta-error" role="alert">
           {join.error.message}

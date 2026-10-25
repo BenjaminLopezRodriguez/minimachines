@@ -9,6 +9,7 @@ import "~/styles/materials.css";
 import "~/styles/landing.css";
 import "~/styles/messenger.css";
 import "~/styles/beta.css";
+import "~/styles/mobile-flows.css";
 
 import { ProductAnalytics } from "~/components/analytics/product-analytics";
 import { type Metadata } from "next";

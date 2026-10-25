@@ -49,6 +49,16 @@ export default tseslint.config(
     },
   },
   {
+    files: ["src/server/assistant/design-assistant.ts"],
+    rules: {
+      // An empty design prompt intentionally becomes null; ?? would keep "".
+      "@typescript-eslint/prefer-nullish-coalescing": [
+        "error",
+        { ignorePrimitives: { string: true } },
+      ],
+    },
+  },
+  {
     linterOptions: {
       reportUnusedDisableDirectives: true,
     },

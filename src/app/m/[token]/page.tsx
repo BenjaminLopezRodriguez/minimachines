@@ -1,108 +1,53 @@
-import { redirect } from "next/navigation";
-
-import { resolveReplyToken, submitReply } from "~/server/data/pager";
-
+import Link from "next/link";
+import { resolveReplyToken } from "~/server/data/pager";
+import { ReplyForm } from "./reply-form";
 import { StatusFeed } from "./status-feed";
 
 type Props = {
   params: Promise<{ token: string }>;
   searchParams: Promise<{ sent?: string }>;
 };
-
-const wrap: React.CSSProperties = {
-  maxWidth: 480,
-  margin: "0 auto",
-  padding: 20,
-  fontFamily: "system-ui, sans-serif",
-};
-
 export default async function ReplyPage({ params, searchParams }: Props) {
   const { token } = await params;
   const { sent } = await searchParams;
-
-  if (sent === "1") {
+  if (sent === "1")
     return (
-      <main style={wrap}>
-        <h2 style={{ marginBottom: 4 }}>Sent ✓</h2>
-        <p style={{ margin: "0 0 16px", opacity: 0.6 }}>
-          Your agent has your reply — here&apos;s what it&apos;s doing.
+      <main className="mm-baton-page">
+        <span className="mm-baton-label">Baton</span>
+        <h1>Reply sent.</h1>
+        <p className="mm-baton-lead">
+          Your answer is saved. The waiting agent can pick up where it left off.
         </p>
         <StatusFeed token={token} />
       </main>
     );
-  }
-
   const event = await resolveReplyToken(token);
-  if (!event) {
+  if (!event)
     return (
-      <main style={wrap}>
-        <h2>Link expired</h2>
-        <p>This reply link was already used or has expired.</p>
+      <main className="mm-baton-page">
+        <span className="mm-baton-label">Baton</span>
+        <h1>This link is no longer active.</h1>
+        <p className="mm-baton-lead">
+          It was already answered or expired. Check your latest email for a new
+          request.
+        </p>
+        <Link href="/dashboard" className="mm-bot-button">
+          Open your workspace
+        </Link>
       </main>
     );
-  }
-
-  async function reply(formData: FormData) {
-    "use server";
-    const bodyVal = formData.get("body");
-    const text = (typeof bodyVal === "string" ? bodyVal : "").trim();
-    if (!text) redirect(`/m/${token}`);
-    const modelVal = formData.get("model");
-    const model =
-      (typeof modelVal === "string" ? modelVal.trim() : "") || undefined;
-    const ok = await submitReply({ token, body: text, model });
-    redirect(ok ? `/m/${token}?sent=1` : `/m/${token}`);
-  }
-
   return (
-    <main style={wrap}>
-      <p style={{ opacity: 0.6, textTransform: "uppercase", fontSize: 12 }}>
-        Agent {event.kind}
-      </p>
-      <blockquote
-        style={{
-          margin: "0 0 16px",
-          padding: "12px 14px",
-          background: "#f4f4f5",
-          borderRadius: 8,
-          whiteSpace: "pre-wrap",
-        }}
-      >
-        {event.text}
-      </blockquote>
-      <form action={reply}>
-        <textarea
-          name="body"
-          required
-          autoFocus
-          rows={5}
-          placeholder="Reply to your agent…"
-          style={{
-            width: "100%",
-            padding: 12,
-            fontSize: 16,
-            borderRadius: 8,
-            border: "1px solid #d4d4d8",
-            boxSizing: "border-box",
-          }}
-        />
-        <button
-          type="submit"
-          style={{
-            marginTop: 12,
-            width: "100%",
-            padding: 14,
-            fontSize: 16,
-            fontWeight: 600,
-            color: "#fff",
-            background: "#111",
-            border: 0,
-            borderRadius: 8,
-          }}
-        >
-          Send
-        </button>
-      </form>
+    <main className="mm-baton-page">
+      <span className="mm-baton-label">
+        Baton · {event.kind === "question" ? "Decision needed" : "Agent update"}
+      </span>
+      <h1>
+        {event.kind === "question"
+          ? "Your agent needs a hand."
+          : "An update from your agent."}
+      </h1>
+      <blockquote className="mm-baton-question">{event.text}</blockquote>
+      <ReplyForm token={token} />
     </main>
   );
 }

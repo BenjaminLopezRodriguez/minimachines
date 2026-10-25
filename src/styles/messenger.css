@@ -639,3 +639,749 @@
     box-shadow: var(--material-relief), var(--material-shadow);
   }
 }
+
+/* Chat mode follows the ChatGPT iOS shape: one top bar, history in a drawer,
+   a quiet canvas, and a pill composer. */
+.mm-header-slot {
+  display: contents;
+}
+.mm-messenger-brand {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.mm-messenger-header {
+  padding: 8px 16px;
+  gap: 12px;
+}
+.mm-messenger .mm-page-switcher {
+  min-height: 40px;
+  font-size: 15px;
+}
+.mm-mode-switch {
+  width: auto;
+  padding: 3px;
+  box-shadow: inset 0 1px 1px var(--material-edge);
+}
+.mm-mode-switch a {
+  min-height: 34px;
+  padding: 4px 18px;
+  font-size: 13px;
+}
+.mm-messenger .mm-icon-control {
+  width: 40px;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+}
+.mm-messenger .mm-icon-control:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.mm-messenger .mm-icon-control:disabled:hover {
+  background: transparent;
+}
+.mm-messenger .mm-theme-toggle {
+  width: 40px;
+  height: 40px;
+}
+
+.mm-messenger .mm-chat-workspace {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+.mm-chat-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 2px;
+  min-height: 0;
+  max-height: none;
+  padding: 10px;
+  border: 0;
+  background: var(--material-panel);
+  overflow-y: auto;
+}
+.mm-chat-sidebar-new,
+.mm-chat-sidebar-bots button,
+.mm-chat-sidebar-row > button:first-child,
+.mm-chat-sidebar-footer > button,
+.mm-chat-sidebar-footer .mm-beta-feedback-trigger.mm-beta-feedback-text {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 400;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+.mm-chat-sidebar-new {
+  font-weight: 500;
+}
+.mm-chat-sidebar :is(button:hover:not(:disabled), button:focus-visible) {
+  background: var(--hover);
+}
+.mm-chat-sidebar button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.mm-chat-sidebar-bots {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+}
+.mm-chat-sidebar-bots button[aria-pressed="true"] {
+  background: var(--secondary);
+}
+.mm-chat-sidebar-bots span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mm-chat-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mm-chat-sidebar-list h2 {
+  margin: 0;
+  padding: 14px 12px 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.mm-chat-sidebar-row {
+  display: flex;
+  align-items: center;
+  border-radius: 12px;
+}
+.mm-chat-sidebar-row:has([aria-current="page"]) {
+  background: var(--secondary);
+}
+.mm-chat-sidebar-row > button:first-child {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mm-chat-sidebar-row > button[aria-current="page"] {
+  background: transparent;
+}
+.mm-chat-sidebar-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.mm-chat-sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+.mm-chat-sidebar-footer > button,
+.mm-chat-sidebar-footer .mm-beta-feedback-trigger.mm-beta-feedback-text {
+  color: var(--muted-foreground);
+}
+
+.mm-chat-drawer[data-slot="dialog-content"] {
+  inset: 0 auto 0 0;
+  display: flex;
+  width: min(84vw, 320px);
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0 20px 20px 0;
+  background: var(--background);
+  transform: none;
+  translate: none;
+  --tw-translate-x: 0px;
+  --tw-translate-y: 0px;
+  animation: mm-drawer-in 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.mm-chat-drawer .mm-chat-sidebar {
+  flex: 1;
+  padding: max(12px, env(safe-area-inset-top)) 10px
+    max(12px, env(safe-area-inset-bottom));
+  background: transparent;
+}
+@keyframes mm-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+.mm-chat-workspace .mm-bots-main {
+  display: flex;
+  flex-direction: column;
+}
+.mm-chat-workspace .mm-chat-welcome h1 {
+  margin: 0;
+  font-size: clamp(22px, 2.6vw, 28px);
+}
+.mm-chat-workspace .mm-bot-message-list {
+  width: min(100%, 760px);
+  padding: 16px 20px;
+}
+.mm-chat-workspace .mm-bot-message-author {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.mm-chat-workspace .mm-bot-message > div {
+  max-width: none;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.mm-chat-workspace .mm-bot-message-user > div {
+  font-size: 16px;
+}
+.mm-chat-workspace .mm-bot-thinking {
+  color: var(--muted-foreground);
+  font-size: 15px;
+}
+.mm-messenger .mm-chat-workspace .mm-bot-composer-wrap {
+  width: min(100%, 760px);
+  margin-inline: auto;
+  padding: 8px 16px max(14px, env(safe-area-inset-bottom));
+}
+.mm-chat-workspace .mm-bot-composer.mm-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px 6px 6px 18px;
+  border-radius: 26px;
+}
+.mm-chat-workspace .mm-bot-composer.mm-chat-composer textarea {
+  flex: 1;
+  min-height: 24px;
+  max-height: 200px;
+  padding: 8px 0;
+  resize: none;
+  overflow-y: auto;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.mm-chat-workspace .mm-bot-composer.mm-chat-composer > div {
+  flex-shrink: 0;
+  gap: 6px;
+  margin: 0;
+}
+.mm-chat-workspace .mm-bot-composer.mm-chat-composer > div > span:empty {
+  display: none;
+}
+.mm-chat-workspace .mm-bot-composer.mm-chat-composer button {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+}
+
+.mm-chat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.mm-chat-chips button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--material-panel);
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+.mm-chat-chips button:hover {
+  background: var(--secondary);
+}
+.mm-chat-chips button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.mm-chat-chips strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.mm-chat-chips span {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.mm-settings-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mm-settings-delete-bot {
+  color: var(--destructive);
+}
+
+@media (min-width: 1100px) {
+  .mm-chat-menu-trigger {
+    display: none;
+  }
+}
+@media (max-width: 1099px) {
+  .mm-messenger .mm-chat-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mm-messenger .mm-chat-workspace > .mm-chat-sidebar {
+    display: none;
+  }
+}
+.mm-page-switcher-burger,
+.mm-chat-sidebar-pages {
+  display: none;
+}
+.mm-chat-drawer .mm-chat-sidebar-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.mm-chat-sidebar-pages > :is(a, button) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+}
+.mm-chat-sidebar-pages > :is(a, button):hover {
+  background: var(--hover);
+  color: var(--foreground);
+}
+
+@media (max-width: 700px) {
+  .mm-messenger-header {
+    grid-template-columns: 1fr auto 1fr;
+    gap: 4px;
+    padding: 6px 8px;
+  }
+  .mm-messenger .mm-mode-switch {
+    grid-row: auto;
+    grid-column: auto;
+    justify-self: center;
+    width: auto;
+  }
+  .mm-messenger-appearance {
+    grid-row: auto;
+    grid-column: auto;
+    gap: 0;
+  }
+  .mm-messenger .mm-theme-toggle {
+    display: none;
+  }
+  .mm-messenger .mm-page-switcher {
+    justify-content: center;
+    width: 40px;
+    min-height: 40px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .mm-messenger .mm-page-switcher > :is(span, .mm-brand-mark, .mm-page-switcher-chevron) {
+    display: none;
+  }
+  .mm-messenger .mm-page-switcher-burger {
+    display: block;
+  }
+  .mm-messenger-brand:has(.mm-chat-menu-trigger) .mm-page-switcher {
+    display: none;
+  }
+  .mm-mode-switch a {
+    min-height: 34px;
+    padding: 4px 12px;
+  }
+  .mm-chat-chips {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    margin-inline: -16px;
+    padding-inline: 16px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .mm-chat-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .mm-chat-chips button {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+  .mm-messenger .mm-chat-workspace .mm-bot-composer-wrap {
+    padding: 6px 12px max(10px, env(safe-area-inset-bottom));
+  }
+  .mm-chat-workspace .mm-bot-composer.mm-chat-composer {
+    padding: 5px 5px 5px 16px;
+    border-radius: 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mm-chat-drawer[data-slot="dialog-content"] {
+    animation: none;
+  }
+  .mm-chat-sidebar button,
+  .mm-chat-chips button {
+    transition: none;
+  }
+}
+
+/* Floating toolbar: a clear, blurred bar over the content with raised
+   controls, so the workspace runs edge to edge beneath it. */
+.mm-messenger {
+  --mm-header-h: 60px;
+  --mm-float-shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 4px 14px rgb(0 0 0 / 10%);
+  position: relative;
+}
+.mm-messenger-header {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 50;
+  min-height: var(--mm-header-h);
+  background: transparent;
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+.mm-messenger-header :is(.mm-icon-control, .mm-theme-toggle) {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--mm-float-shadow);
+}
+.mm-messenger-header :is(.mm-icon-control, .mm-theme-toggle):hover {
+  background: var(--card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%), 0 6px 18px rgb(0 0 0 / 14%);
+}
+.mm-messenger-header .mm-icon-control:disabled,
+.mm-messenger-header .mm-icon-control:disabled:hover {
+  opacity: 1;
+  color: var(--muted-foreground);
+  background: var(--card);
+  box-shadow: var(--mm-float-shadow);
+}
+.mm-messenger-header .mm-page-switcher {
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--mm-float-shadow);
+}
+.mm-messenger-header .mm-mode-switch {
+  background: var(--card);
+  box-shadow: var(--mm-float-shadow);
+}
+.mm-messenger-header .mm-mode-switch a[aria-current="page"] {
+  background: var(--secondary);
+  box-shadow: none;
+}
+.mm-messenger-brand,
+.mm-messenger-appearance {
+  gap: 8px;
+}
+
+.mm-messenger-content > section[aria-label="Project whiteboard"] {
+  padding-top: var(--mm-header-h);
+}
+.mm-messenger .mm-chat-workspace > .mm-chat-sidebar {
+  padding-top: calc(var(--mm-header-h) + 8px);
+}
+.mm-messenger .mm-chat-workspace .mm-bot-messages {
+  padding-top: var(--mm-header-h);
+}
+
+@media (max-width: 700px) {
+  .mm-messenger {
+    --mm-header-h: 56px;
+  }
+  .mm-messenger-header {
+    padding: 8px 10px;
+  }
+  .mm-messenger-header .mm-page-switcher {
+    width: 40px;
+    padding: 0;
+    border-radius: 50%;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .mm-messenger-header {
+    background: var(--background);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (forced-colors: active) {
+  .mm-messenger-header :is(.mm-icon-control, .mm-theme-toggle, .mm-page-switcher) {
+    border: 1px solid ButtonText;
+  }
+}
+
+/* Send stays a circle: older rules force a 44px min-width on composer buttons. */
+.mm-chat-workspace .mm-bot-composer.mm-chat-composer button {
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+/* The blank canvas runs under the floating header; its caption floats too. */
+.mm-messenger-content > section:has(> .mm-blank-whiteboard) {
+  padding-top: 0;
+}
+.mm-messenger .mm-blank-whiteboard {
+  position: relative;
+}
+.mm-messenger .mm-canvas-caption {
+  position: absolute;
+  top: var(--mm-header-h);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  min-height: 0;
+  padding: 4px 20px;
+  background: transparent;
+  pointer-events: none;
+}
+.mm-messenger .mm-canvas-caption > * {
+  pointer-events: auto;
+}
+@media (max-width: 700px) {
+  .mm-messenger .mm-canvas-caption {
+    padding: 2px 14px;
+  }
+}
+
+/* Composer opens two lines tall, iOS-style, and still grows with the draft. */
+.mm-chat-workspace .mm-bot-composer.mm-chat-composer {
+  padding: 10px 8px 8px 18px;
+  border-radius: 28px;
+}
+.mm-chat-workspace .mm-bot-composer.mm-chat-composer textarea {
+  min-height: 52px;
+  padding: 4px 0;
+}
+
+/* In bot mode the mode switch rests as a centered squircle avatar once the
+   user goes idle, and springs back on any activity. */
+.mm-mode-dock {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+}
+.mm-mode-dock > * {
+  grid-area: 1 / 1;
+}
+.mm-mode-dock .mm-mode-switch {
+  transition:
+    opacity 0.28s ease,
+    transform 0.36s cubic-bezier(0.32, 0.72, 0, 1),
+    filter 0.28s ease;
+}
+.mm-mode-dock[data-idle] .mm-mode-switch {
+  opacity: 0;
+  transform: scale(0.35);
+  filter: blur(6px);
+  pointer-events: none;
+}
+.mm-mode-avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 32%;
+  background: var(--material-primary-shine), #4565eb;
+  color: #fff;
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 35%),
+    var(--mm-float-shadow);
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+  cursor: pointer;
+  transition:
+    opacity 0.24s ease,
+    transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@supports (corner-shape: squircle) {
+  .mm-mode-avatar {
+    border-radius: 50%;
+    corner-shape: squircle;
+  }
+}
+.mm-mode-dock[data-idle] .mm-mode-avatar {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.mm-mode-avatar:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mm-mode-dock .mm-mode-switch,
+  .mm-mode-avatar {
+    transition: opacity 0.15s ease;
+    transform: none;
+    filter: none;
+  }
+}
+.mm-mode-dock > .mm-mode-switch,
+.mm-mode-dock > .mm-mode-avatar {
+  grid-area: 1 / 1;
+}
+.mm-mode-avatar {
+  background: linear-gradient(180deg, #fff6ea, #ffe4c8);
+  color: inherit;
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 70%),
+    var(--mm-float-shadow);
+}
+.mm-mode-avatar img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+}
+
+/* The Bot pill visibly becomes the avatar: Whiteboard fades, Bot glides to
+   center and shrinks, then the avatar resolves in its place. Expanding back
+   stays quick. */
+.mm-mode-dock .mm-mode-switch {
+  transform-origin: 25% 50%;
+  filter: none;
+  transition:
+    opacity 0.2s ease,
+    transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.mm-mode-dock .mm-mode-switch a {
+  transition:
+    opacity 0.2s ease,
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+.mm-mode-dock[data-idle] .mm-mode-switch {
+  opacity: 0;
+  transform: translateX(25%) scale(0.3);
+  filter: none;
+  transition:
+    transform 0.9s cubic-bezier(0.65, 0, 0.35, 1) 0.25s,
+    opacity 0.35s ease 0.95s;
+}
+.mm-mode-dock[data-idle] .mm-mode-switch a:not([aria-current="page"]) {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.mm-mode-avatar {
+  transition:
+    opacity 0.15s ease,
+    transform 0.2s ease;
+}
+.mm-mode-dock[data-idle] .mm-mode-avatar {
+  transition:
+    opacity 0.45s ease 0.85s,
+    transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.85s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mm-mode-dock .mm-mode-switch,
+  .mm-mode-dock[data-idle] .mm-mode-switch {
+    transform: none;
+    transition: opacity 0.3s ease;
+  }
+  .mm-mode-dock[data-idle] .mm-mode-avatar {
+    transform: none;
+    transition: opacity 0.3s ease 0.3s;
+  }
+}
+
+/* Each message is its own bubble; consecutive ones stack tightly. */
+.mm-chat-workspace .mm-bot-message-user + .mm-bot-message-user {
+  margin-top: -14px;
+}
+.mm-chat-workspace .mm-bot-message-user > div {
+  width: fit-content;
+  margin-left: auto;
+}
+
+.mm-design-prompt {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--material-panel);
+}
+.mm-design-prompt > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.mm-design-prompt span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.mm-design-prompt button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 12px;
+  box-shadow: var(--mm-float-shadow);
+}
+.mm-design-prompt button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.mm-design-prompt p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}

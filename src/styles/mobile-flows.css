@@ -1,0 +1,324 @@
+/* Scoped interaction refinements. The messenger chrome remains owned by Cursor. */
+.mm-mobile-connection {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  min-width: 0;
+}
+.mm-mobile-connection .mm-bot-button {
+  min-height: 44px;
+  justify-content: center;
+  text-align: center;
+}
+.mm-mobile-connection .mm-bot-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.mm-mobile-connection small {
+  font-size: 13px;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+.mm-connection-steps {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.mm-connection-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.mm-connection-steps li > span {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--secondary);
+  font-size: 11px;
+}
+.mm-connection-steps li[aria-current] {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.mm-connection-steps li[aria-current] > span {
+  background: var(--foreground);
+  color: var(--background);
+}
+.mm-connection-status strong {
+  font-size: 17px;
+  font-weight: 500;
+}
+.mm-connection-status p {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+.mm-connection-command {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px 4px 12px;
+  border-radius: 12px;
+  background: var(--material-panel);
+}
+.mm-connection-copy {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 13px;
+}
+.mm-connection-copy:active {
+  background: var(--secondary);
+}
+.mm-connection-help {
+  width: 100%;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.mm-connection-help summary,
+.mm-mobile-preferences summary,
+.mm-baton-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  cursor: pointer;
+  gap: 8px;
+}
+.mm-connection-help summary::after,
+.mm-mobile-preferences summary::after,
+.mm-baton-details summary::after {
+  content: "+";
+  font-size: 18px;
+  color: var(--muted-foreground);
+}
+.mm-connection-help[open] summary::after,
+.mm-mobile-preferences[open] summary::after,
+.mm-baton-details[open] summary::after {
+  content: "−";
+}
+.mm-connection-help p {
+  margin: 10px 0;
+}
+.mm-connection-help .mm-bot-button {
+  display: flex;
+  margin-top: 12px;
+}
+.mm-mobile-preferences {
+  margin-top: 24px;
+}
+.mm-mobile-preferences summary {
+  font-size: 14px;
+}
+.mm-mobile-preferences summary span {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.mm-baton-page {
+  width: min(100%, 560px);
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: max(28px, env(safe-area-inset-top)) 20px
+    max(24px, env(safe-area-inset-bottom));
+  color: var(--foreground);
+}
+.mm-baton-label {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.mm-baton-page h1 {
+  margin: 14px 0 18px;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.mm-baton-lead {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.mm-baton-question {
+  margin: 0 0 24px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--material-panel);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  font-size: 17px;
+}
+.mm-baton-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mm-baton-form label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.mm-baton-form textarea {
+  width: 100%;
+  min-height: 108px;
+  max-height: 40svh;
+  resize: vertical;
+  padding: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--material-panel);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.mm-baton-form textarea::placeholder {
+  color: var(--muted-foreground);
+}
+.mm-baton-send {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  bottom: 0;
+  padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+  background: var(--background);
+}
+.mm-baton-send p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.mm-baton-send .mm-bot-button {
+  width: 100%;
+  min-height: 48px;
+}
+.mm-baton-send .mm-bot-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.mm-baton-error {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.mm-baton-activity {
+  margin-top: 24px;
+}
+.mm-baton-state {
+  font-size: 16px;
+  line-height: 1.5;
+}
+.mm-baton-update {
+  padding: 14px 0;
+}
+.mm-baton-update time {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.mm-baton-update p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  margin: 6px 0 0;
+}
+.mm-baton-details {
+  margin: 20px 0;
+}
+.mm-baton-details summary span {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.mm-baton-command-log {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--material-panel);
+}
+.mm-baton-command-log > div + div {
+  margin-top: 16px;
+}
+.mm-baton-command-log span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.mm-baton-command-log code,
+.mm-baton-command-log p {
+  font-family: var(--font-plex-mono), monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mm-baton-command-log code {
+  display: block;
+}
+.mm-baton-command-log p {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+}
+.mm-baton-result {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  text-decoration: none;
+  margin-top: 20px;
+}
+.mm-baton-retry {
+  margin: 16px 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--material-panel);
+}
+.mm-baton-retry p {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+:is(.mm-mobile-connection, .mm-mobile-preferences, .mm-baton-page)
+  :is(button, a, summary, textarea):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .mm-mobile-connection .mm-agent-terminal {
+    height: min(360px, 45svh);
+  }
+  .mm-beta-page > div > a.mm-gloss-primary {
+    display: flex;
+    justify-content: center;
+    min-height: 48px;
+    width: 100%;
+  }
+  .mm-mobile-preferences .mm-beta-input {
+    font-size: 16px;
+  }
+  .mm-mobile-preferences .mm-beta-check {
+    min-height: 44px;
+    align-items: center;
+  }
+}
+
+.mm-mobile-connection .mm-bot-field-hint {
+  font-size: 14px;
+  line-height: 1.5;
+}

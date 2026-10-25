@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { FeedbackButton } from "./feedback-button";
 import { trackProduct } from "~/lib/analytics";
 import { useState } from "react";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -48,14 +49,24 @@ export function BetaApplication({ admin = false }: { admin?: boolean }) {
       <p className="mm-beta-lead">
         {entry.status === "approved"
           ? "Try one real project and tell us what worked, what didn’t, and whether you’d use it again."
-          : "We’re bringing people in a few at a time. Tell us what you want to try so we can match you to a testing group."}
+          : entry.status === "revoked"
+            ? "Your projects stay in your account. Contact us through feedback to discuss access."
+            : "Your application is saved. We’ll review it with the next group; you don’t need to fill anything else out."}
       </p>
-      <ApplicationProfile key={entry.id} entry={entry} />
       {entry.status === "approved" && (
         <Link href="/dashboard" className="mm-gloss mm-gloss-primary">
           Open your workspace →
         </Link>
       )}
+      {entry.status === "revoked" && (
+        <FeedbackButton label="Ask about access" surface="other" />
+      )}
+      <details className="mm-mobile-preferences">
+        <summary>
+          Testing preferences <span>Optional</span>
+        </summary>
+        <ApplicationProfile key={entry.id} entry={entry} />
+      </details>
       {admin && (
         <p>
           <Link href="/dashboard/beta">Manage testers and feedback →</Link>
@@ -72,8 +83,12 @@ function ApplicationProfile({
   const [role, setRole] = useState(entry.role ?? "");
   const [useCase, setUseCase] = useState(entry.useCase ?? "");
   const [consent, setConsent] = useState(entry.feedbackConsent);
+  const [saved, setSaved] = useState(false);
   const save = api.beta.profile.useMutation({
-    onSuccess: () => trackProduct("beta_profile_saved"),
+    onSuccess: () => {
+      setSaved(true);
+      trackProduct("beta_profile_saved");
+    },
   });
   return (
     <form
@@ -90,7 +105,10 @@ function ApplicationProfile({
         className="mm-beta-input"
         id="beta-role"
         value={role}
-        onChange={(e) => setRole(e.target.value)}
+        onChange={(e) => {
+          setRole(e.target.value);
+          setSaved(false);
+        }}
         placeholder="Founder, developer, designer…"
         maxLength={80}
       />
@@ -101,7 +119,10 @@ function ApplicationProfile({
         className="mm-beta-input"
         id="beta-usecase"
         value={useCase}
-        onChange={(e) => setUseCase(e.target.value)}
+        onChange={(e) => {
+          setUseCase(e.target.value);
+          setSaved(false);
+        }}
         rows={3}
         maxLength={1000}
         placeholder="A small project you already want to make progress on"
@@ -110,14 +131,17 @@ function ApplicationProfile({
         <input
           type="checkbox"
           checked={consent}
-          onChange={(e) => setConsent(e.target.checked)}
+          onChange={(e) => {
+            setConsent(e.target.checked);
+            setSaved(false);
+          }}
         />
         You can contact me for a short feedback conversation.
       </label>
       <button className="mm-bot-button" disabled={save.isPending}>
         {save.isPending ? "Saving…" : "Save testing preferences"}
       </button>
-      {save.isSuccess && <p role="status">Preferences saved.</p>}
+      {saved && <p role="status">Preferences saved.</p>}
       {save.error && (
         <p role="alert" className="mm-beta-error">
           {save.error.message}

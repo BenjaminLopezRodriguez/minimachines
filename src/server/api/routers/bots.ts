@@ -5,6 +5,7 @@ import { enforceRateLimit } from "~/server/lib/distributed-rate-limit";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { botSchema } from "~/lib/bots";
+import { designAssistantReply } from "~/server/assistant/design-assistant";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import {
   deleteBot,
@@ -85,6 +86,32 @@ export const botsRouter = createTRPCRouter({
     .input(id)
     .mutation(({ ctx, input }) =>
       handled(() => deleteConversation(input.id, ctx.userId)),
+    ),
+  assist: protectedProcedure
+    .input(
+      z.object({
+        messages: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              content: z.string().trim().min(1).max(8000),
+            }),
+          )
+          .min(1)
+          .max(40),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      handled(async () => {
+        await enforceRateLimit(`assistant:${ctx.userId}`, 60, 60 * 60_000);
+        try {
+          return await designAssistantReply(input.messages);
+        } catch (error) {
+          if (error instanceof RequestLimitError) throw error;
+          console.error("[assistant] reply failed", error);
+          throw new Error("The assistant couldn't reply. Try again.");
+        }
+      }),
     ),
   send: protectedProcedure
     .input(

@@ -1,150 +1,134 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
 import type { BatonStatus } from "~/server/data/pager";
 
-const row: React.CSSProperties = {
-  padding: "10px 12px",
-  background: "#f4f4f5",
-  borderRadius: 8,
-  whiteSpace: "pre-wrap",
-  marginBottom: 8,
-};
-
-const label: React.CSSProperties = {
-  opacity: 0.6,
-  textTransform: "uppercase",
-  fontSize: 11,
-  letterSpacing: 0.4,
-};
-
-/**
- * What the agent did with your answer. Polls the token-scoped status feed
- * until the agent reports it landed, then hands over the live URL.
- */
+/** Resume is observable activity, not an assumption made when a reply is saved. */
 export function StatusFeed({ token }: { token: string }) {
   const [status, setStatus] = useState<BatonStatus | null>(null);
   const [expired, setExpired] = useState(false);
-
+  const [interrupted, setInterrupted] = useState(false);
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
-    let stop = false;
+    let stopped = false,
+      inFlight = false,
+      done = false;
+    const controller = new AbortController();
     async function tick() {
+      if (stopped || done || inFlight || document.hidden) return;
+      inFlight = true;
       try {
-        const res = await fetch(`/api/m/${token}/status`, { cache: "no-store" });
+        const res = await fetch(`/api/m/${token}/status`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (stopped) return;
         if (res.status === 404) {
           setExpired(true);
-          return true;
+          done = true;
+          return;
         }
-        if (!res.ok) return false;
+        if (!res.ok) {
+          setInterrupted(true);
+          return;
+        }
         const next = (await res.json()) as BatonStatus;
-        if (!stop) setStatus(next);
-        return next.done;
+        if (stopped) return;
+        setStatus(next);
+        setInterrupted(false);
+        done = next.done;
       } catch {
-        // Phone went through a tunnel; the next tick retries.
-        return false;
+        if (!stopped) setInterrupted(true);
+      } finally {
+        inFlight = false;
       }
     }
-    void tick();
-    // ponytail: 3s poll, no socket. Swap for SSE if the feed gets chatty.
-    const id = setInterval(() => {
-      void tick().then((done) => {
-        if (done) clearInterval(id);
-      });
-    }, 3000);
+    const refresh = () => void tick();
+    refresh();
+    const timer = window.setInterval(refresh, 3000);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
-      stop = true;
-      clearInterval(id);
+      stopped = true;
+      controller.abort();
+      window.clearInterval(timer);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
     };
-  }, [token]);
-
-  if (expired) {
-    return <p style={{ opacity: 0.6 }}>This link has expired.</p>;
-  }
-
-  const events = status?.events ?? [];
-  const commands = status?.commands ?? [];
-
+  }, [token, retry]);
+  if (expired)
+    return (
+      <p className="mm-baton-lead">
+        This status link has expired. Your submitted answer is saved; check your
+        workspace for the latest activity.
+      </p>
+    );
+  const events = status?.events ?? [],
+    commands = status?.commands ?? [];
   return (
-    <>
-      {events.length === 0 && commands.length === 0 ? (
-        <p style={{ opacity: 0.6 }}>Working… no update yet.</p>
-      ) : null}
-
-      {events.map((e, i) => (
-        <div key={`${e.at}-${i}`} style={row}>
-          <p style={{ ...label, margin: "0 0 4px" }}>
-            {e.kind} · {new Date(e.at).toLocaleTimeString()}
-          </p>
-          {e.text}
-        </div>
-      ))}
-
-      {commands.length > 0 ? (
-        <div style={{ marginTop: events.length ? 16 : 0 }}>
-          <p style={{ ...label, margin: "0 0 8px" }}>Running on the machine</p>
-          <div
-            style={{
-              background: "#18181b",
-              color: "#e4e4e7",
-              borderRadius: 8,
-              padding: "10px 12px",
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-              fontSize: 12,
-              lineHeight: 1.5,
-              overflowX: "auto",
-            }}
+    <section aria-label="Agent activity" className="mm-baton-activity">
+      <p className="mm-baton-state" role="status">
+        {status?.done
+          ? "Your agent finished this task."
+          : events.length || commands.length
+            ? "Your agent has activity to review."
+            : "Waiting for your agent to continue…"}
+      </p>
+      {interrupted && (
+        <div className="mm-baton-retry" role="status">
+          <p>Connection interrupted. Your answer is saved.</p>
+          <button
+            type="button"
+            className="mm-bot-button mm-bot-button-secondary"
+            onClick={() => setRetry((n) => n + 1)}
           >
-            {commands.map((c, i) => (
-              <div key={`${c.at}-${i}`} style={{ marginBottom: 6 }}>
-                <div style={{ whiteSpace: "pre", opacity: c.running ? 1 : 0.85 }}>
-                  <span
-                    style={{
-                      color: c.running ? "#fbbf24" : c.ok ? "#4ade80" : "#f87171",
-                    }}
-                  >
-                    {c.running ? "•" : c.ok ? "✓" : "✗"}
-                  </span>{" "}
-                  {c.cmd}
-                </div>
-                {c.tail ? (
-                  <div
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      opacity: 0.5,
-                      paddingLeft: 14,
-                    }}
-                  >
-                    {c.tail}
-                  </div>
-                ) : null}
+            Reconnect
+          </button>
+        </div>
+      )}
+      {events.map((event, i) => (
+        <article className="mm-baton-update" key={`${event.at}-${i}`}>
+          <time dateTime={event.at}>
+            {new Date(event.at).toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </time>
+          <p>{event.text}</p>
+        </article>
+      ))}
+      {!!commands.length && (
+        <details className="mm-baton-details">
+          <summary>
+            Activity details <span>{commands.length}</span>
+          </summary>
+          <div className="mm-baton-command-log">
+            {commands.map((command, i) => (
+              <div key={`${command.at}-${i}`}>
+                <span>
+                  {command.running
+                    ? "Running"
+                    : command.ok
+                      ? "Completed"
+                      : "Needs attention"}
+                </span>
+                <code>{command.cmd}</code>
+                {command.tail && <p>{command.tail}</p>}
               </div>
             ))}
           </div>
-        </div>
-      ) : null}
-
-      {status?.done && status.liveUrl ? (
+        </details>
+      )}
+      {status?.done && status.liveUrl && (
         <a
           href={status.liveUrl}
           target="_blank"
           rel="noreferrer"
-          style={{
-            display: "block",
-            marginTop: 16,
-            padding: 14,
-            fontSize: 16,
-            fontWeight: 600,
-            textAlign: "center",
-            textDecoration: "none",
-            color: "#fff",
-            background: "#111",
-            borderRadius: 8,
-          }}
+          className="mm-bot-button mm-baton-result"
         >
-          Open live site
+          Open result
         </a>
-      ) : null}
-    </>
+      )}
+    </section>
   );
 }

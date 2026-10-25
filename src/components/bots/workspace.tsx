@@ -2,6 +2,8 @@
 
 import {
   Bot,
+  Check,
+  Copy,
   LogOut,
   Menu,
   MessageSquare,
@@ -39,6 +41,36 @@ import type { RouterOutputs } from "~/trpc/react";
 import { api } from "~/trpc/react";
 
 type BotProfile = RouterOutputs["bots"]["list"][number];
+type AssistantMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  designPrompt?: string | null;
+};
+
+function DesignPrompt({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="mm-design-prompt">
+      <div>
+        <span>Design prompt</span>
+        <button
+          type="button"
+          onClick={() =>
+            void navigator.clipboard.writeText(text).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1600);
+            })
+          }
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <p>{text}</p>
+    </div>
+  );
+}
 type Machine = RouterOutputs["machines"]["list"][number];
 
 function BotEditor({
@@ -56,6 +88,7 @@ function BotEditor({
   onSave: (input: BotInput) => void;
   onCancel: () => void;
 }) {
+  const [connectionReady, setConnectionReady] = useState(false);
   const [name, setName] = useState(bot?.name ?? "My bot");
   const [instructions, setInstructions] = useState(
     bot?.instructions ??
@@ -89,6 +122,7 @@ function BotEditor({
           machine={machines.find((m) => m.id === machineId)}
           provider={provider}
           onMachine={setMachineId}
+          onReadyChange={setConnectionReady}
         />
         <details className="mm-agent-options">
           <summary>Personalize & workspace options</summary>
@@ -140,7 +174,11 @@ function BotEditor({
           <button
             className="mm-bot-button"
             disabled={
-              busy || !machineId || !name.trim() || !instructions.trim()
+              busy ||
+              !machineId ||
+              !name.trim() ||
+              !instructions.trim() ||
+              (!bot && !connectionReady)
             }
           >
             {busy ? "Saving…" : bot ? "Save" : "Continue"}
@@ -161,9 +199,11 @@ function HeaderSlot({ id, children }: { id: string; children: ReactNode }) {
 export function BotsWorkspace({
   variant = "page",
   active = true,
+  onMessageCount,
 }: {
   variant?: "page" | "messenger";
   active?: boolean;
+  onMessageCount?: (count: number) => void;
 } = {}) {
   const messenger = variant === "messenger";
   const bots = api.bots.list.useQuery();
@@ -183,6 +223,7 @@ export function BotsWorkspace({
     "bot" | "conversation" | null
   >(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [thread, setThread] = useState<AssistantMessage[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
   const activeBotId = selectedBot ?? bots.data?.[0]?.id ?? "";
   const bot = bots.data?.find((b) => b.id === activeBotId);
@@ -228,16 +269,63 @@ export function BotsWorkspace({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
   }, [messages.length, sending, optimistic]);
+  const shownCount =
+    thread.length +
+    messages.length +
+    (optimistic && !messages.some((m) => m.id === optimistic.id) ? 1 : 0);
+  useEffect(() => {
+    onMessageCount?.(shownCount);
+  }, [shownCount, onMessageCount]);
+  const assist = api.bots.assist.useMutation();
+  const ready = !!bot && botMachine?.status === "running";
   const resetChat = () => {
     setConversationId(null);
     setDraft("");
     setOptimistic(null);
+    setThread([]);
     setConfirmDelete(null);
     setLocalError("");
     send.reset();
   };
+  const askAssistant = async (history: AssistantMessage[]) => {
+    setSending(true);
+    setLocalError("");
+    try {
+      const answer = await assist.mutateAsync({
+        messages: history
+          .slice(-20)
+          .map(({ role, content }) => ({ role, content })),
+      });
+      setThread((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: answer.reply,
+          designPrompt: answer.designPrompt,
+        },
+      ]);
+    } catch (error) {
+      setLocalError(
+        error instanceof Error ? error.message : "The assistant couldn't reply.",
+      );
+    } finally {
+      setSending(false);
+    }
+  };
   const submit = async (content: string, requestId = crypto.randomUUID()) => {
     if (sending || !content.trim()) return;
+    if (messenger && !ready && !conversationId) {
+      trackProduct("bot_message_submitted", "bot");
+      const history = [
+        ...thread,
+        { id: requestId, role: "user" as const, content },
+      ];
+      setThread(history);
+      setDraft("");
+      await askAssistant(history);
+      return;
+    }
     if (!bot) {
       setLocalError(
         "Connect your agent in settings to send this message. Your draft is saved here.",
@@ -281,6 +369,13 @@ export function BotsWorkspace({
   const lastUser =
     messages.at(-1)?.role === "user" ? messages.at(-1) : undefined;
   const retry = optimistic ?? lastUser;
+  const retryLast = () => {
+    if (thread.at(-1)?.role === "user") return void askAssistant(thread);
+    if (retry) void submit(retry.content, retry.id);
+  };
+  const canRetry = thread.length
+    ? thread.at(-1)?.role === "user"
+    : !!retry;
   const saveProfile = async (input: BotInput) => {
     try {
       const saved = await save.mutateAsync({
@@ -289,7 +384,7 @@ export function BotsWorkspace({
       });
       await utils.bots.list.invalidate();
       setSelectedBot(saved.id);
-      if (editing === "new") {
+      if (editing === "new" && !thread.length) {
         setConversationId(null);
         setOptimistic(null);
       }
@@ -483,6 +578,7 @@ export function BotsWorkspace({
                   onClick={() => {
                     setLibraryOpen(false);
                     setConversationId(c.id);
+                    setThread([]);
                     setEditing(null);
                     setOptimistic(null);
                     setLocalError("");
@@ -537,7 +633,7 @@ export function BotsWorkspace({
   );
 
   if (messenger) {
-    const hasMessages = messages.length > 0 || !!optimistic;
+    const hasMessages = thread.length > 0 || messages.length > 0 || !!optimistic;
     return (
       <div className="mm-bots-workspace mm-chat-workspace">
         {active && (
@@ -653,6 +749,20 @@ export function BotsWorkspace({
               </p>
             ) : !hasMessages ? null : (
               <div className="mm-bot-message-list">
+                {thread.map((message) => (
+                  <article
+                    className={`mm-bot-message mm-bot-message-${message.role}`}
+                    key={message.id}
+                  >
+                    <span className="mm-bot-message-author">
+                      {message.role === "user" ? "You" : "Assistant"}
+                    </span>
+                    <div>{message.content}</div>
+                    {message.designPrompt && (
+                      <DesignPrompt text={message.designPrompt} />
+                    )}
+                  </article>
+                ))}
                 {messages.map((message) => (
                   <article
                     className={`mm-bot-message mm-bot-message-${message.role}`}
@@ -724,27 +834,17 @@ export function BotsWorkspace({
                 </button>
               </div>
             )}
-            {!sending && !serverBusy && retry && (
-              <button
-                className="mm-bot-retry"
-                onClick={() => void submit(retry.content, retry.id)}
-              >
+            {!sending && !serverBusy && canRetry && (
+              <button className="mm-bot-retry" onClick={retryLast}>
                 <RotateCcw size={13} />
                 Retry last message
               </button>
-            )}
-            {bot && botMachine?.status !== "running" && (
-              <p className="mm-bot-offline">
-                Start this bot’s machine in{" "}
-                <Link href="/dashboard/machines">Machines</Link> to chat.
-              </p>
             )}
             <ChatComposer
               draft={draft}
               onChange={setDraft}
               onSubmit={() => void submit(draft)}
               sending={sending || serverBusy}
-              disabled={!!bot && botMachine?.status !== "running"}
               label={bot ? `Message ${bot.name}` : "Message your bot"}
               placeholder="Ask anything"
             />
