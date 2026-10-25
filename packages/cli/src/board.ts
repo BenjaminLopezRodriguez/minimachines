@@ -22,7 +22,8 @@ import { randomUUID } from "node:crypto";
 
 import * as Y from "yjs";
 
-import { connect, projectForDir, runSync } from "./sync.js";
+import { askText, choose, isInteractive, missing } from "./prompts.js";
+import { connect, ensureProject, runSync } from "./sync.js";
 
 type Api = (method: string, path: string, body?: unknown) => Promise<Response>;
 
@@ -174,7 +175,7 @@ function engineFor(spec: string, trust: boolean, api: Api): Engine {
       },
     };
   }
-  throw new Error(`Unknown engine "${spec}". Use claude, codex, code or bot:<bot-id>.`);
+  throw new Error(`Unknown engine "${spec}". Use claude, codex, code, bot (to pick or create one) or bot:<bot-id>.`);
 }
 
 function promptFor(card: CardData, doc: Y.Doc): string {
@@ -207,12 +208,13 @@ function parse(argv: string[]) {
   return { flag, has: (n: string) => argv.includes(n), positional };
 }
 
-async function openBoard(api: Api, dir: string, explicit?: string) {
-  const projectId = await projectForDir(api, dir, explicit);
-  if (!projectId) {
-    console.error("No project for this folder. Share it with `mm up`, or pass --project <id>.");
-    process.exit(1);
-  }
+async function openBoard(api: Api, dir: string, explicit?: string, create?: boolean) {
+  const { id: projectId } = await ensureProject(api, dir, {
+    explicit,
+    create,
+    what: "a whiteboard",
+    createHint: "mm board --create   (or share the files too: mm up)",
+  });
   const doc = new Y.Doc();
   const { provider, access } = await connect(api, projectId, doc);
   return { doc, provider, access, projectId };
@@ -226,7 +228,7 @@ export async function boardCommand(argv: string[], deps: { api: Api; baseUrl: st
   if (sub === "work") return work(positional[1], { flag, has }, deps);
 
   const dir = resolve(sub === "add" || sub === "move" ? "." : (sub ?? "."));
-  const { doc, provider, access, projectId } = await openBoard(deps.api, dir, flag("--project"));
+  const { doc, provider, access, projectId } = await openBoard(deps.api, dir, flag("--project"), has("--create"));
   const done = () => (provider.destroy(), process.exit(0));
   const flush = () => new Promise((r) => setTimeout(r, 600)); // let the update reach the room
 
@@ -263,16 +265,48 @@ export async function boardCommand(argv: string[], deps: { api: Api; baseUrl: st
   done();
 }
 
+/** `--engine bot` without an id: pick one of your server bots, or create one. */
+async function pickBot(api: Api): Promise<string> {
+  const { bots } = (await (await api("GET", "/api/v1/bots")).json()) as { bots: { id: string; name: string; provider: string; machineId: string }[] };
+  if (!isInteractive()) {
+    if (!bots.length) missing("You don't have a bot yet.", 'POST /api/v1/bots {"name","instructions","machineId","provider"} — or create one in the dashboard');
+    missing(`Which bot? ${bots.map((b) => `bot:${b.id} (${b.name})`).join(", ")}`, "mm board work --engine bot:<id>");
+  }
+  const NEW = "__new__";
+  const pick = await choose(bots.length ? "Which bot should take cards?" : "You don't have a bot yet.", [
+    ...bots.map((b) => ({ label: b.name, value: b.id, hint: `${b.provider} on ${b.machineId}` })),
+    { label: "+ Create a bot", value: NEW },
+  ]);
+  if (!pick) process.exit(1);
+  if (pick !== NEW) return `bot:${pick}`;
+  const { machines } = (await (await api("GET", "/api/v1/machines")).json()) as { machines: { id: string; name: string; status: string }[] };
+  const running = machines.filter((m) => m.status === "running");
+  if (!running.length) missing("A bot works on a machine, and none is running.", "mm create <templateId>");
+  const machineId = await choose("Which machine does it work on?", running.map((m) => ({ label: m.name, value: m.id, hint: m.id })));
+  const provider = await choose("Which agent runs it? (it must be installed and signed in on that machine)", [
+    { label: "Claude Code", value: "claude" as const },
+    { label: "Codex", value: "codex" as const },
+  ]);
+  if (!machineId || !provider) process.exit(1);
+  const name = await askText("Bot name", "Pixel");
+  const { bot } = (await (
+    await api("POST", "/api/v1/bots", { name, machineId, provider, instructions: "Work on the cards you're given in this project; keep changes focused and say what you changed." })
+  ).json()) as { bot: { id: string } };
+  console.log(`created bot ${name}`);
+  return `bot:${bot.id}`;
+}
+
 async function work(dirArg: string | undefined, o: { flag: (n: string) => string | undefined; has: (n: string) => boolean }, deps: { api: Api; baseUrl: string }) {
   const dir = resolve(dirArg ?? ".");
   const trust = o.has("--trust");
-  const engine = engineFor(o.flag("--engine") ?? "claude", trust, deps.api);
+  const spec = o.flag("--engine") ?? "claude";
+  const engine = engineFor(spec === "bot" ? await pickBot(deps.api) : spec, trust, deps.api);
   const deployCmd = o.flag("--deploy");
   const autoDeploy = o.has("--auto-deploy");
   const once = o.has("--once");
   const me = `${hostname().replace(/\.local$/, "")}:${process.pid}`;
 
-  const { doc, provider, access, projectId } = await openBoard(deps.api, dir, o.flag("--project"));
+  const { doc, provider, access, projectId } = await openBoard(deps.api, dir, o.flag("--project"), o.has("--create"));
   if (access.role === "viewer") {
     console.error("Viewers can't take cards.");
     process.exit(1);

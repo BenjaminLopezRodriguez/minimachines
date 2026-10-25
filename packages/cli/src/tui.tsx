@@ -482,7 +482,14 @@ function App({ deps, exit, startView }: { deps: TuiDeps; exit: (after?: () => Pr
       </Box>
       <Box flexGrow={1}>
         <Box flexDirection="column" width={listWidth} borderStyle="round" borderColor={BRAND} paddingX={1}>
-          {items.length === 0 && <Text dimColor>{status === "loading…" ? "loading…" : data.note ?? "nothing here yet"}</Text>}
+          {items.length === 0 && (
+            <Text dimColor>
+              {status === "loading…"
+                ? "loading…"
+                : (data.note ??
+                  (state.tab === "machines" ? "No machines yet — press n to create one." : state.tab === "shares" ? "No share links yet — mm share create --machine <id>" : "nothing here yet"))}
+            </Text>
+          )}
           {items.slice(start, start + rows).map((it, i) => {
             const on = start + i === state.index;
             const badgeW = it.badge?.text.length ?? 0;

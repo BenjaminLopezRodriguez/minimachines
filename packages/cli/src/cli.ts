@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 
 import { CODE_MODEL, codeCommand } from "./code.js";
+import { askText, choose, confirm, isInteractive, missing, setInteractive } from "./prompts.js";
 import { peopleCommand, repoKeyFromRemote } from "./people.js";
 
 type Machine = {
@@ -60,13 +61,13 @@ function usage(exitCode = 1): never {
   mm whiteboard            this project's whiteboard: cards in the terminal, the canvas in a window
   mm --no-tui              agents: same data as NDJSON, never interactive. Add --no-tui to any command.
   minimachines skill install [--agent claude|codex|cursor] [--dir <path>] [--print]
-  minimachines create <templateId> [--json]
-  minimachines exec <machineId> <command...> [--cwd <dir>]
-  minimachines put <machineId> <localFile> <remotePath>
-  minimachines ask <machineId> <question> [--timeout <sec>]
-  minimachines say <machineId> finished|succeeded <text>
-  minimachines stop <machineId>
-  minimachines run <machineId> [--keep-awake] [--lid-closed]
+  minimachines create [templateId] [--json]                 no template: pick one
+  minimachines exec [machineId] <command...> [--cwd <dir>]  no machine: pick one or create one
+  minimachines put [machineId] [localFile] [remotePath]     missing pieces: pick them
+  minimachines ask [machineId] <question> [--timeout <sec>]
+  minimachines say [machineId] finished|succeeded <text>
+  minimachines stop [machineId]
+  minimachines run [machineId] [--keep-awake] [--lid-closed]
   minimachines login [--no-open] [--paste]
   minimachines logout
   minimachines whoami
@@ -81,15 +82,20 @@ function usage(exitCode = 1): never {
   minimachines people + <row|email|+phone|agent:<id>>... [--view] [--note <text>] [--yes]
   minimachines people - <row|email|+phone>...              revoke an invite / remove a member
   minimachines up [dir]                                    share this folder as a live project; prints a link anyone invited can open
-  minimachines sync [dir] [--project <id>]                 keep a folder in step with its live project
-  minimachines join <link> [dir] [--here]                  pull a project you were invited to, then keep it in sync
-  minimachines board [dir] [--json] | add "<title>" [--details …] [--ready] | move <card> <column>
+  minimachines sync [dir] [--project <id>] [--create]                 keep a folder in step with its live project
+  minimachines join [link] [dir] [--here]                   no link: pick one of your projects                  pull a project you were invited to, then keep it in sync
+  minimachines board [dir] [--json] [--create] | add "<title>" [--details …] [--ready] | move <card> <column>
   minimachines board work [dir] [--engine claude|codex|code|bot:<id>] [--trust] [--deploy "<cmd>"] [--auto-deploy] [--once]
                                                            agents take Ready cards from the project whiteboard
   minimachines view [<url>|<port>|<machineId>]             open a dev app in the desktop viewer (default :3000)
   minimachines tui [--json] [--test]                       dashboard: machines, shares, people (? for keys)
   minimachines code [--machine <id>] [-p <prompt>] [--yes]  coding agent (needs ANTHROPIC_API_KEY)
   mm run <machineId>
+
+When something a command needs doesn't exist yet (a machine, template, file,
+project or bot), it offers to pick or create it. Agents and scripts (no TTY or
+--no-tui) never get a prompt: the error names the command that creates it, and
+sync/board accept --create to set up the project in one step.
 
 Run flags (macOS):
   --keep-awake   caffeinate the Mac while the console session is open
@@ -576,8 +582,25 @@ async function currentProjectId(): Promise<string | undefined> {
 // --- view: open a dev app in the desktop viewer -----------------------------
 
 /** `3000` / `:3000` → localhost, `vm_…` → that machine's app URL, else a URL as given. */
+/** Nothing given: localhost:3000 if something answers there, else let a person pick what to view. */
+async function defaultViewTarget(): Promise<string> {
+  const local = "http://localhost:3000";
+  const up = await fetch(local, { signal: AbortSignal.timeout(800) }).then(() => true, () => false);
+  if (up || !isInteractive()) return local;
+  const { machines } = (await (await api("GET", "/api/v1/machines")).json()) as { machines: (Machine & { appUrl?: string })[] };
+  const apps = machines.filter((m) => m.appUrl);
+  const pick = await choose("Nothing is running on localhost:3000. What should open?", [
+    ...apps.map((m) => ({ label: `${m.name}'s app`, value: m.appUrl!, hint: m.id })),
+    { label: "Another local port or URL…", value: "__ask__" },
+    { label: "localhost:3000 anyway (start your dev server next)", value: local },
+  ]);
+  if (!pick) process.exit(1);
+  return pick === "__ask__" ? viewTarget(await askText("Port or URL", "5173")) : pick;
+}
+
 async function viewTarget(target?: string): Promise<string> {
-  const t = target?.trim() || "3000";
+  if (!target?.trim()) return defaultViewTarget();
+  const t = target.trim();
   if (/^:?\d{2,5}$/.test(t)) return `http://localhost:${t.replace(":", "")}`;
   if (/^vm_[\w-]+$/.test(t)) {
     const { machine } = (await (await api("GET", mpath(t))).json()) as { machine: Machine & { appUrl?: string } };
@@ -636,6 +659,57 @@ async function view(target?: string) {
   const url = await viewTarget(target);
   const where = await openInViewer(url);
   console.log(where === "viewer" ? `viewing ${url}` : `${url}\n(viewer not installed — opened your browser; install it from packages/viewer: pnpm dist)`);
+}
+
+// --- pick-or-create: commands that need a machine, template or file ------------
+
+const looksLikeMachine = (s?: string) => Boolean(s && /^vm_[\w-]+$/.test(s));
+
+type TemplateRow = { id: string; name: string; summary: string };
+
+/** A template id: as given, else picked from the list (people) or listed (agents). */
+async function pickTemplate(given?: string): Promise<string> {
+  if (given) return given;
+  const { templates } = (await (await api("GET", "/api/v1/templates")).json()) as { templates: TemplateRow[] };
+  if (!isInteractive()) missing(`Which template? One of: ${templates.map((t) => t.id).join(", ")}`, "mm create <templateId>");
+  const id = await choose("Pick a template for the new machine:", templates.map((t) => ({ label: t.name, value: t.id, hint: `${t.id} · ${t.summary}` })));
+  if (!id) process.exit(1);
+  return id;
+}
+
+/** A machine id: as given, else picked from yours — with "create a new one" — or a clear error for agents. */
+async function pickMachine(given?: string): Promise<string> {
+  if (looksLikeMachine(given)) return given!;
+  const { machines } = (await (await api("GET", "/api/v1/machines")).json()) as { machines: (Machine & { appUrl?: string })[] };
+  const live = machines.filter((m) => m.status !== "stopped");
+  if (!isInteractive()) {
+    if (!live.length) missing("You don't have a running machine yet.", "mm create <templateId>   (mm create lists templates)");
+    missing(`Which machine? Pass its id: ${live.map((m) => m.id).join(", ")}`, "mm create <templateId>");
+  }
+  const NEW = "__new__";
+  const id = await choose(live.length ? "Which machine?" : "You don't have a running machine yet.", [
+    ...live.map((m) => ({ label: `${m.name}  ${m.status}`, value: m.id, hint: `${m.id}${m.task ? ` · ${m.task.slice(0, 50)}` : ""}` })),
+    { label: "+ Create a new machine", value: NEW },
+  ]);
+  if (!id) process.exit(1);
+  if (id !== NEW) return id;
+  const res = await api("POST", "/api/v1/machines", { templateId: await pickTemplate(), projectId: await currentProjectId() });
+  const { machine } = (await res.json()) as { machine: Machine };
+  console.log(`created ${machine.id}`);
+  return machine.id;
+}
+
+/** A local file: as given (if it exists), else picked from this folder. */
+async function pickFile(given?: string): Promise<string> {
+  if (given && existsSync(given)) return given;
+  if (given) console.error(`No such file: ${given}`);
+  if (!isInteractive()) missing("Which file? Pass a path that exists.", "mm put <machineId> <localFile> [remotePath]");
+  const { listFiles } = await import("./sync.js");
+  const files = listFiles(process.cwd());
+  if (!files.length) missing("This folder has no files to upload.", "create one, then: mm put <machineId> <file>");
+  const file = await choose("Pick a file to upload:", files.map((f) => ({ label: f, value: f })));
+  if (!file) process.exit(1);
+  return file;
 }
 
 const mpath = (id: string, tail = "") =>
@@ -880,6 +954,14 @@ async function main() {
   const agent = raw.includes("--no-tui");
   const args = raw.filter((a) => a !== "--no-tui");
   const cmd = args[0];
+  setInteractive(!agent);
+
+  // Not logged in and the command needs the API: offer to log in, then carry on.
+  const offline = ["login", "logout", "skill", "whoami", "help", "--help", "-h", "--version", "-v"];
+  if (cmd && !offline.includes(cmd) && !(cmd === "tui" && args.includes("--test")) && !resolveKey() && isInteractive()) {
+    if (await confirm("You're not logged in. Log in now?")) await loginDevice(false);
+    else process.exit(1);
+  }
   const tuiDeps = () => ({
     api: apiOrThrow,
     openUrl,
@@ -994,42 +1076,50 @@ async function main() {
     });
     return;
   }
-  if (cmd === "create" && positional[1]) {
-    await machineCreate(positional[1], args.includes("--json"));
+  // Machine commands take the id first; when it's missing (or isn't a vm_ id), pick or create one.
+  const machineArgs = () => (looksLikeMachine(positional[1]) ? { id: positional[1], rest: positional.slice(2) } : { id: undefined, rest: positional.slice(1) });
+  if (cmd === "create") {
+    await machineCreate(await pickTemplate(positional[1]), args.includes("--json"));
     return;
   }
-  if (cmd === "exec" && positional[1] && positional[2]) {
+  if (cmd === "exec") {
+    const { id, rest } = machineArgs();
     // Join the rest so `mm exec id npm run build` works unquoted too.
-    await machineExec(positional[1], positional.slice(2).join(" "), flagOf("--cwd"));
+    let command = rest.join(" ");
+    if (!command && isInteractive()) command = await askText("Command to run");
+    if (!command) missing("What should run?", "mm exec <machineId> <command…>");
+    await machineExec(await pickMachine(id), command, flagOf("--cwd"));
     return;
   }
-  if (cmd === "put" && positional[3]) {
-    await machinePut(positional[1]!, positional[2]!, positional[3]);
+  if (cmd === "put") {
+    const { id, rest } = machineArgs();
+    const machine = await pickMachine(id);
+    const local = await pickFile(rest[0]);
+    await machinePut(machine, local, rest[1] ?? local);
     return;
   }
-  if (cmd === "ask" && positional[2]) {
-    await machineAsk(
-      positional[1]!,
-      positional.slice(2).join(" "),
-      Number(flagOf("--timeout") ?? 300),
-    );
+  if (cmd === "ask") {
+    const { id, rest } = machineArgs();
+    if (!rest.length) missing("What should the question say?", 'mm ask <machineId> "<question>"');
+    await machineAsk(await pickMachine(id), rest.join(" "), Number(flagOf("--timeout") ?? 300));
     return;
   }
-  if (cmd === "say" && positional[3]) {
-    const kind = positional[2]!;
+  if (cmd === "say") {
+    const { id, rest } = machineArgs();
+    const kind = rest[0];
     if (kind !== "finished" && kind !== "succeeded") {
       console.error("say kind must be finished|succeeded (use `ask` for questions)");
       process.exit(1);
     }
-    await machineNotify(positional[1]!, kind, positional.slice(3).join(" "));
+    await machineNotify(await pickMachine(id), kind, rest.slice(1).join(" "));
     return;
   }
-  if (cmd === "stop" && positional[1]) {
-    await machineStop(positional[1]);
+  if (cmd === "stop") {
+    await machineStop(await pickMachine(positional[1]));
     return;
   }
-  if (cmd === "run" && args[1] && !args[1].startsWith("-")) {
-    await run(args[1], { keepAwake, lidClosed });
+  if (cmd === "run") {
+    await run(await pickMachine(positional[1]), { keepAwake, lidClosed });
     return;
   }
   // Support `mm agent run <id>` as shown in the dashboard "agent" preset.
@@ -1096,12 +1186,9 @@ async function main() {
       return;
     }
     if (args[1] === "create") {
-      const machineId = flag("--machine");
-      const port = Number(flag("--port"));
-      if (!machineId || !port) {
-        console.error("share create needs --machine <id> --port <n>");
-        process.exit(1);
-      }
+      const machineId = await pickMachine(flag("--machine"));
+      const port = Number(flag("--port") ?? (isInteractive() ? await askText("Port your app listens on", "3000") : 3000));
+      if (!port) missing("Which port?", "mm share create --machine <id> --port <n>");
       await shareCreate({ originKind: "machine", machineId, port, kind, access, secret, label });
       return;
     }

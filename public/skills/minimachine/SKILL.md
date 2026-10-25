@@ -29,6 +29,10 @@ When this skill is active, this is not optional:
   user has to click, which is the thing this tool removes. Approvals belong on
   the phone via `mm ask`, not in their terminal.
 - **Deliver a public URL**, never "it's running locally."
+- **When a command says something doesn't exist,** it prints the command that
+  creates it (`create it: …`) and exits 1 — run that, then retry. `mm board`
+  and `mm sync` take `--create` to set up the folder's project in one step.
+  With `--no-tui` nothing ever waits for input.
 - **Always call the CLI with `--no-tui`.** Bare `mm` opens an interactive TUI
   meant for a person and will hang an agent. `mm --no-tui` prints the same
   data (machines, shares, people) as NDJSON, one line per tab, and never opens

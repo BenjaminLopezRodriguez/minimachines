@@ -19,6 +19,7 @@ import YProvider from "y-partyserver/provider";
 import * as Y from "yjs";
 
 import { repoKeyFromRemote } from "./people.js";
+import { choose, isInteractive, missing } from "./prompts.js";
 
 type Api = (method: string, path: string, body?: unknown) => Promise<Response>;
 type Access = { host: string; secure: boolean; room: string; token: string; role: string };
@@ -407,29 +408,72 @@ export async function projectForDir(api: Api, dir: string, explicit?: string): P
   return projects.find((p) => (key ? p.repoKey === key : p.name === basename(dir)))?.id;
 }
 
+/** Name and repo key a new project for `dir` would get (its origin repo, else the folder name). */
+export function projectIdentity(dir: string): { name: string; repoKey?: string } {
+  const remote = git(dir, ["remote", "get-url", "origin"])?.trim();
+  const repoKey = remote ? (repoKeyFromRemote(remote) ?? undefined) : undefined;
+  return { name: repoKey ? basename(repoKey) : basename(dir), repoKey };
+}
+
+/**
+ * The folder's project, or a new one when it has none: created right away
+ * with --create, offered at a terminal, otherwise a clear error naming the
+ * command that creates it. `created` tells the caller it's brand new.
+ */
+export async function ensureProject(
+  api: Api,
+  dir: string,
+  opts: { explicit?: string; create?: boolean; what: string; createHint: string },
+): Promise<{ id: string; created: boolean }> {
+  const found = await projectForDir(api, dir, opts.explicit);
+  if (found) return { id: found, created: false };
+  const identity = projectIdentity(dir);
+  if (!opts.create) {
+    if (!isInteractive()) missing(`No project for ${identity.name} yet.`, opts.createHint);
+    const ok = await choose(`No project for ${identity.name} yet.`, [
+      { label: `Set up ${opts.what} for ${identity.name}`, value: true, hint: identity.repoKey ?? "named after this folder" },
+      { label: "Cancel", value: false },
+    ]);
+    if (!ok) process.exit(1);
+  }
+  const { project } = (await (await api("PUT", "/api/v1/projects", identity)).json()) as { project: { id: string } };
+  console.log(`created project ${identity.name}`);
+  return { id: project.id, created: true };
+}
+
 /** `mm sync [dir]`: keep this folder in step with its project. */
 export async function syncCommand(argv: string[], deps: { api: Api; baseUrl: string }) {
   const i = argv.indexOf("--project");
   const dir = resolve(argv.find((a, j) => !a.startsWith("-") && argv[j - 1] !== "--project") ?? ".");
-  const projectId = await projectForDir(deps.api, dir, i >= 0 ? argv[i + 1] : undefined);
-  if (!projectId) {
-    console.error("No project for this folder. Share it with `mm up`, or pass --project <id>.");
-    process.exit(1);
-  }
+  const { id: projectId, created } = await ensureProject(deps.api, dir, {
+    explicit: i >= 0 ? argv[i + 1] : undefined,
+    create: argv.includes("--create"),
+    what: "a live project (shares this folder's files)",
+    createHint: "mm up   (or: mm sync --create)",
+  });
   console.log(`syncing ${dir} with ${linkFor(deps.baseUrl, projectId)}`);
-  await runSync({ api: deps.api, projectId, dir, seed: "room" });
+  // A brand-new project starts from this folder, like `mm up`.
+  await runSync({ api: deps.api, projectId, dir, seed: created ? "local" : "room" });
 }
 
 /** `mm join <link|projectId> [dir]`: pull a project you have access to, then sync. */
 export async function joinCommand(argv: string[], deps: { api: Api; baseUrl: string }) {
   const [target, folder] = argv.filter((a) => !a.startsWith("-"));
-  const projectId = target?.match(/\/p\/([0-9a-f-]{36})/)?.[1] ?? (target && /^[0-9a-f-]{36}$/.test(target) ? target : undefined);
-  if (!projectId) {
-    console.error("Usage: mm join <project link> [folder]\nAccept the invite in your browser first; the link looks like …/p/<id>.");
-    process.exit(1);
-  }
   const res = await deps.api("GET", "/api/v1/projects");
-  const { projects } = (await res.json()) as { projects: { id: string; name: string }[] };
+  const { projects } = (await res.json()) as { projects: { id: string; name: string; role: string }[] };
+  let projectId = target?.match(/\/p\/([0-9a-f-]{36})/)?.[1] ?? (target && /^[0-9a-f-]{36}$/.test(target) ? target : undefined);
+  if (!projectId) {
+    // No link: pick one of your projects, or share this folder as a new one.
+    if (!isInteractive()) missing("Which project? Pass its link (…/p/<id>).", "mm up   (shares this folder as a new project)");
+    const UP = "__up__";
+    const pick = await choose(projects.length ? "Which project?" : "You're not in any project yet.", [
+      ...projects.map((p) => ({ label: p.name, value: p.id, hint: p.role })),
+      { label: "+ Share this folder as a new project (mm up)", value: UP },
+    ]);
+    if (!pick) process.exit(1);
+    if (pick === UP) return upCommand([], deps);
+    projectId = pick;
+  }
   const project = projects.find((p) => p.id === projectId);
   if (!project) {
     console.error("You're not in this project yet. Open the invite link in your browser to accept it, then run this again.");

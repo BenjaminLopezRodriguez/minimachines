@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as Y from "yjs";
 
 import { addCard, cardsOf, COLUMNS, moveCard, read, type CardData, type Column } from "./board.js";
-import { connect, projectForDir } from "./sync.js";
+import { connect, projectForDir, projectIdentity } from "./sync.js";
 
 type Api = (method: string, path: string, body?: unknown) => Promise<Response>;
 
@@ -39,14 +39,22 @@ export function WhiteboardMode(props: {
   const [row, setRow] = useState(0);
   const [prompt, setPrompt] = useState<Prompt>(null);
   const [status, setStatus] = useState("connecting…");
+  const [offer, setOffer] = useState<{ name: string; resolve: (yes: boolean) => void } | null>(null);
 
   useEffect(() => {
     let provider: Awaited<ReturnType<typeof connect>>["provider"] | undefined;
     let gone = false;
     void (async () => {
       try {
-        const id = await projectForDir(props.api, process.cwd());
-        if (!id) throw new Error("No project for this folder yet. Share it with `mm up` first.");
+        let id = await projectForDir(props.api, process.cwd());
+        if (!id) {
+          // Nothing to open yet: offer to set one up (c), right here.
+          const identity = projectIdentity(process.cwd());
+          if (!(await new Promise<boolean>((resolve) => setOffer({ name: identity.name, resolve })))) throw new Error("No whiteboard for this folder yet.");
+          setOffer(null);
+          const { project } = (await (await props.api("PUT", "/api/v1/projects", identity)).json()) as { project: { id: string } };
+          id = project.id;
+        }
         const conn = await connect(props.api, id, doc);
         if (gone) return conn.provider.destroy();
         provider = conn.provider;
@@ -86,6 +94,11 @@ export function WhiteboardMode(props: {
   const canvasUrl = project ? canvasLink(props.baseUrl, project.id) : null;
 
   useInput((input, key) => {
+    if (offer) {
+      if (input === "c" || key.return) return offer.resolve(true);
+      if (key.escape || input === "q") return (offer.resolve(false), props.onExit());
+      return;
+    }
     if (prompt?.kind === "new") {
       if (key.escape) return setPrompt(null);
       if (key.return) {
@@ -123,6 +136,20 @@ export function WhiteboardMode(props: {
     if (input === "d") return setPrompt({ kind: "delete", id: sel.id });
   });
 
+  if (offer) {
+    return (
+      <Box flexDirection="column" paddingX={2} paddingY={1}>
+        <Text bold color={BRAND}>whiteboard</Text>
+        <Text>{`${offer.name} doesn't have a whiteboard yet.`}</Text>
+        <Text>
+          <Text color={BRAND}>c</Text>
+          <Text dimColor>{` set one up now (files stay local — share them later with mm up)   `}</Text>
+          <Text color={BRAND}>esc</Text>
+          <Text dimColor> back</Text>
+        </Text>
+      </Box>
+    );
+  }
   if (error) {
     return (
       <Box flexDirection="column" paddingX={2} paddingY={1}>

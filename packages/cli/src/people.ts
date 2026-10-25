@@ -156,11 +156,8 @@ export async function peopleCommand(
   const named = flag("--project");
   const remote = git(["remote", "get-url", "origin"])?.trim();
   const repoKey = named ? undefined : remote ? (repoKeyFromRemote(remote) ?? undefined) : undefined;
-  if (!named && !repoKey) {
-    console.error("Not in a git repo with an origin remote. Use: mm people --project <name>");
-    process.exit(1);
-  }
-  const name = named ?? basename(repoKey!);
+  // Not a repo: the project is named after the folder (created if it doesn't exist; it's an upsert).
+  const name = named ?? (repoKey ? basename(repoKey) : basename(process.cwd()));
   const { project } = (await (await deps.api("PUT", "/api/v1/projects", { name, repoKey })).json()) as {
     project: Project;
   };
