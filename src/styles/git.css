@@ -249,7 +249,7 @@
   white-space: nowrap;
 }
 .mm-git-file-status {
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--font-plex-mono), monospace;
   width: 14px;
   color: var(--signal);
   font-size: 10px;
@@ -341,7 +341,7 @@
   max-height: 660px;
   margin: 0;
   overflow: auto;
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--font-plex-mono), monospace;
   font-size: 11px;
   line-height: 1.9;
   tab-size: 2;
@@ -652,5 +652,7 @@
 }
 
 @media (max-width: 700px) {
-  .mm-git-workspace button { min-height: 44px; }
+  .mm-git-workspace button {
+    min-height: 44px;
+  }
 }

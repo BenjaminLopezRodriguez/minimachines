@@ -1,86 +1,36 @@
-import { BrandMark } from "~/components/brand-mark";
-import {
-  ArrowRight,
-  ArrowDown,
-  Terminal,
-  Folder,
-  FileCode2,
-} from "lucide-react";
+import { ArrowRight, ArrowDown } from "lucide-react";
 import Link from "next/link";
-import { CommandBlock } from "./command-block";
-import { installers } from "~/lib/onboarding";
+import { ProjectStory } from "./project-story";
 
 export function Hero() {
   return (
-    <section className="mm-container mm-hero" aria-labelledby="hero-title">
-      <div className="mm-hero-copy">
-        <div className="mm-hero-lockup" aria-hidden="true">
-          <BrandMark />
-          minimachines
-        </div>
-        <p className="mm-intro">
-          <span aria-hidden="true" />
-          Cloud workspaces for coding agents
+    <section className="mm-container mm-home-hero" aria-labelledby="hero-title">
+      <div className="mm-home-intro">
+        <p className="mm-home-context">
+          A cloud workspace for the agent you already use.
         </p>
         <h1 id="hero-title">
-          Small machine.
+          A little more room
           <br />
-          <span>Big headroom.</span>
+          for your next idea.
         </h1>
-        <p className="mm-lead">
-          Give your agent a workspace of its own. Run builds, tests, and long
-          jobs in the cloud. Keep your laptop for everything else.
+        <p className="mm-home-lead">
+          Give your coding agent a place to work. Share what it builds. And when
+          it needs a hand, the baton brings the question back to you.
         </p>
-        <div className="mm-actions">
+        <div className="mm-home-actions">
           <Link className="mm-gloss mm-gloss-primary" href="/install">
-            Get started <ArrowRight size={17} aria-hidden="true" />
+            Start a project <ArrowRight size={17} aria-hidden="true" />
           </Link>
-          <Link className="mm-gloss mm-gloss-secondary" href="/docs">
-            Read the docs
-          </Link>
+          <a className="mm-home-tour" href="#how-it-works">
+            Take a look around <ArrowDown size={16} aria-hidden="true" />
+          </a>
         </div>
-        <p className="mm-prerequisite">
-          Node.js 20+ · macOS, Linux, or Windows
+        <p className="mm-home-setup-note">
+          Set up with the CLI. Bring Codex, Claude Code, or Cursor.
         </p>
       </div>
-      <div className="mm-workbench">
-        <div className="mm-workbench-chrome">
-          <span>
-            <Terminal size={15} aria-hidden="true" /> Your terminal
-          </span>
-          <span>CLI setup</span>
-        </div>
-        <div className="mm-workbench-body">
-          <p className="mm-terminal-heading">A little more room to build.</p>
-          <p className="mm-terminal-description">
-            Start with the CLI. Your agent comes with you.
-          </p>
-          <CommandBlock command={installers.npm} label="CLI install command" />
-          <div className="mm-terminal-next">
-            <span>Then connect</span>
-            <code>mm login</code>
-            <code>mm skill install --agent codex</code>
-          </div>
-          <Link href="/install">
-            Walk through setup <ArrowRight size={15} aria-hidden="true" />
-          </Link>
-        </div>
-        <div className="mm-workspace-strip">
-          <Folder size={16} aria-hidden="true" />
-          <span>/workspace</span>
-          <span>
-            <FileCode2 size={14} aria-hidden="true" /> Your files. Your tools.
-          </span>
-        </div>
-      </div>
-      <a href="#how-it-works" className="mm-hero-bottom">
-        <span>
-          You bring the agent.
-          <br />
-          <strong>We give it somewhere to work.</strong>
-        </span>
-        <ArrowDown size={22} aria-hidden="true" />
-      </a>
+      <ProjectStory />
     </section>
   );
 }

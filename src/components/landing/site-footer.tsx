@@ -8,7 +8,7 @@ export function SiteFooter() {
         <Link href="/" className="mm-wordmark">
           <BrandMark className="mm-brand-mark" /> minimachines
         </Link>
-        <p>More room for the work.</p>
+        <p>A little room for your next idea.</p>
       </div>
       <nav aria-label="Footer navigation">
         <Link href="/install">Install CLI</Link>

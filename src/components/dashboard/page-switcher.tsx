@@ -9,6 +9,7 @@ import {
   KeyRound,
   LogOut,
   Server,
+  PanelsTopLeft,
   Terminal,
   Users,
 } from "lucide-react";
@@ -26,9 +27,14 @@ import {
 } from "~/components/ui/dropdown-menu";
 
 const pages = [
-  { href: "/dashboard", label: "Machines", icon: Server },
+  { href: "/dashboard", label: "Bot", icon: Bot },
+  {
+    href: "/dashboard?mode=whiteboard",
+    label: "Whiteboard",
+    icon: PanelsTopLeft,
+  },
+  { href: "/dashboard/machines", label: "Machines", icon: Server },
   { href: "/dashboard/git", label: "Git workspace", icon: GitBranch },
-  { href: "/bots", label: "Bots", icon: Bot },
   { href: "/dashboard/team", label: "Team", icon: Users },
   { href: "/dashboard/settings", label: "Keys & MCP", icon: KeyRound },
   { href: "/dashboard/docs", label: "Setup & docs", icon: BookOpen },
@@ -38,10 +44,12 @@ export function PageSwitcher({
   title,
   brand = false,
   desktopContent,
+  activeHref,
 }: {
   title: string;
   brand?: boolean;
   desktopContent?: ReactNode;
+  activeHref?: string;
 }) {
   const pathname = usePathname();
   return (
@@ -64,7 +72,9 @@ export function PageSwitcher({
           className="mm-page-menu"
         >
           {pages.map(({ href, label, icon: Icon }) => {
-            const current = pathname === href || title === label;
+            const current = activeHref
+              ? activeHref === href
+              : pathname === href || title === label;
             return (
               <DropdownMenuItem key={href} asChild>
                 <Link

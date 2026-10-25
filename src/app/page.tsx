@@ -5,7 +5,7 @@ import { SiteHeader } from "~/components/landing/site-header";
 
 export default function Home() {
   return (
-    <div className="mm-site">
+    <div className="mm-site mm-home-page">
       <SiteHeader />
       <main id="main-content">
         <Hero />

@@ -32,7 +32,7 @@ export default async function BotsLayout({
           <h1 className="mm-bots-mobile-title">
             <PageSwitcher title="Bots" brand />
           </h1>
-          <Link href="/dashboard" className="mm-bots-machines-link">
+          <Link href="/dashboard/machines" className="mm-bots-machines-link">
             <ArrowLeft size={14} />
             Machines
           </Link>

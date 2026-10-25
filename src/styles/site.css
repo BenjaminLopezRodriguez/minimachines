@@ -28,7 +28,7 @@
   text-wrap: pretty;
 }
 .mm-site code {
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--font-plex-mono), monospace;
   font-size: 0.88em;
 }
 .mm-site :is(a, button, input, summary, pre):focus-visible {
@@ -269,7 +269,7 @@
   font-size: inherit;
 }
 .mm-prompt {
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--font-plex-mono), monospace;
   color: var(--mm-muted);
   font-size: 12px;
   user-select: none;
@@ -652,7 +652,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--font-plex-mono), monospace;
   font-size: 12px;
   color: var(--mm-muted);
 }
@@ -781,7 +781,7 @@
   border: 1px solid var(--mm-line);
   border-radius: 12px;
   background: var(--mm-panel);
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--font-plex-mono), monospace;
   font-size: 13px;
   color: var(--mm-ink);
 }

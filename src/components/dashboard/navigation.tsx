@@ -1,16 +1,29 @@
 "use client";
 
-import { BookOpen, Bot, GitBranch, KeyRound, Server, Users } from "lucide-react";
+import {
+  BookOpen,
+  Bot,
+  GitBranch,
+  KeyRound,
+  PanelsTopLeft,
+  Server,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
-  { href: "/dashboard", label: "Machines", icon: Server },
+  { href: "/dashboard", label: "Bot", icon: Bot },
+  {
+    href: "/dashboard?mode=whiteboard",
+    label: "Whiteboard",
+    icon: PanelsTopLeft,
+  },
+  { href: "/dashboard/machines", label: "Machines", icon: Server },
   { href: "/dashboard/git", label: "Git workspace", icon: GitBranch },
   { href: "/dashboard/team", label: "Team", icon: Users },
   { href: "/dashboard/settings", label: "Keys & MCP", icon: KeyRound },
   { href: "/dashboard/docs", label: "Setup & docs", icon: BookOpen },
-  { href: "/bots", label: "Bots", icon: Bot },
 ];
 
 export function DashboardNavigation({ activePath }: { activePath?: string }) {

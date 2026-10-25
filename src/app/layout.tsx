@@ -1,27 +1,35 @@
 import "~/styles/globals.css";
+import "@excalidraw/excalidraw/index.css";
 import "~/styles/site.css";
 import "~/styles/dashboard.css";
 import "~/styles/git.css";
 import "~/styles/bots.css";
 import "~/styles/mobile.css";
+import "~/styles/materials.css";
+import "~/styles/landing.css";
+import "~/styles/messenger.css";
 
 import { type Metadata } from "next";
-import { Figtree, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 
 import { ThemeProvider } from "~/components/theme-provider";
 import { themeScript } from "~/lib/theme";
 
 import { TRPCReactProvider } from "~/trpc/react";
 
-export const viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: {
-    default: "minimachines — Dedicated VMs for coding agents",
+    default: "minimachines — A little room for your next idea",
     template: "%s · minimachines",
   },
   description:
-    "Cloud workspaces for coding agents. Install the Mini Machines CLI, connect your agent, and run builds, tests, and long jobs off your laptop.",
+    "Give your coding agent a cloud workspace, share what it builds, and stay in the loop with the baton. Bring your next project to minimachines.",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     apple: "/apple-touch-icon.png",
@@ -31,25 +39,28 @@ export const metadata: Metadata = {
   openGraph: {
     title: "minimachines",
     description:
-      "Dedicated cloud VMs for the agents you already use. Heavy agentic compute, off your laptop.",
+      "A cloud workspace for your coding agent. Bring an idea, share what it builds, and stay in the loop with the baton.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "minimachines",
     description:
-      "Dedicated cloud VMs for the agents you already use. Heavy agentic compute, off your laptop.",
+      "A cloud workspace for your coding agent. Bring an idea, share what it builds, and stay in the loop with the baton.",
   },
 };
 
-const figtree = Figtree({
+const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
-  variable: "--font-figtree",
+  variable: "--font-plex-sans",
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
+const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
-  variable: "--font-geist-mono",
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
+  display: "swap",
 });
 
 export default function RootLayout({
@@ -58,7 +69,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${figtree.variable} ${geistMono.variable}`}
+      className={`${plexSans.variable} ${plexMono.variable}`}
       suppressHydrationWarning
     >
       <head>

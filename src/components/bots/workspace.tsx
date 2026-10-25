@@ -1,19 +1,18 @@
 "use client";
 
 import {
-  ArrowUp,
   Bot,
   Check,
   ChevronRight,
   MessageSquare,
-  MoreHorizontal,
   Plus,
   RotateCcw,
-  Settings2,
+  Settings,
   Trash2,
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { ChatWelcome, ChatComposer } from "./chat-surface";
 import { MobileDisclosure } from "~/components/mobile-disclosure";
 import {
   Dialog,
@@ -140,14 +139,16 @@ function BotEditor({
             <p>
               Uses the agent account signed in on this machine. Install the
               current CLI and sign in through the{" "}
-              <Link href="/dashboard">machine console</Link> before chatting.
+              <Link href="/dashboard/machines">machine console</Link> before
+              chatting.
             </p>
           </div>
         </MobileDisclosure>
         {!machines.length && (
           <p className="mm-bot-error">
-            Create a machine in <Link href="/dashboard">Mini Machines</Link> to
-            connect your first bot.
+            Create a machine in{" "}
+            <Link href="/dashboard/machines">Mini Machines</Link> to connect
+            your first bot.
           </p>
         )}
         {error && (
@@ -233,8 +234,12 @@ export function BotsWorkspace() {
     !!conversation.data?.generationId &&
     !!conversation.data.generationStartedAt &&
     Date.now() - conversation.data.generationStartedAt.getTime() < 180000;
-  const showEditor =
-    editing !== null || (!bots.isPending && !bots.error && !bots.data?.length);
+  const showEditor = editing !== null;
+  const composerRef = useRef<HTMLDivElement>(null);
+  const choosePrompt = (prompt: string) => {
+    setDraft(prompt);
+    composerRef.current?.querySelector("textarea")?.focus();
+  };
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
   }, [messages.length, sending, optimistic]);
@@ -247,8 +252,15 @@ export function BotsWorkspace() {
     send.reset();
   };
   const submit = async (content: string, requestId = crypto.randomUUID()) => {
-    if (!bot || sending || !content.trim() || botMachine?.status !== "running")
+    if (sending || !content.trim()) return;
+    if (!bot) {
+      setLocalError(
+        "Connect your agent in settings to send this message. Your draft is saved here.",
+      );
+      setEditing("new");
       return;
+    }
+    if (botMachine?.status !== "running") return;
     setSending(true);
     setLocalError("");
     setOptimistic({ id: requestId, content });
@@ -290,8 +302,12 @@ export function BotsWorkspace() {
       });
       await utils.bots.list.invalidate();
       setSelectedBot(saved.id);
+      if (editing === "new") {
+        setConversationId(null);
+        setOptimistic(null);
+      }
       setEditing(null);
-      resetChat();
+      setLocalError("");
     } catch {
       /* mutation error is shown in the form */
     }
@@ -320,16 +336,16 @@ export function BotsWorkspace() {
       <div className="mm-bots-sidebar-heading">
         <span>Your bots</span>
         <button
-          aria-label="Create a bot"
-          title="Create a bot"
+          aria-label="Bot settings"
+          title="Bot settings"
           disabled={busy}
           onClick={() => {
             setLibraryOpen(false);
-            setEditing("new");
+            setEditing(bot ? "edit" : "new");
             save.reset();
           }}
         >
-          <Plus size={18} />
+          <Settings size={18} />
         </button>
       </div>
       {bots.isPending ? (
@@ -447,9 +463,9 @@ export function BotsWorkspace() {
           <DropdownMenuTrigger asChild>
             <button
               className="mm-icon-control"
-              aria-label="Conversation options"
+              aria-label="Bot settings and conversation options"
             >
-              <MoreHorizontal size={21} />
+              <Settings size={21} />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -472,9 +488,9 @@ export function BotsWorkspace() {
               New conversation
             </DropdownMenuItem>
             <DropdownMenuItem
-              disabled={busy || !bot}
+              disabled={busy}
               onSelect={() => {
-                setEditing("edit");
+                setEditing(bot ? "edit" : "new");
                 save.reset();
               }}
             >
@@ -496,30 +512,72 @@ export function BotsWorkspace() {
       {library}
 
       <main className="mm-bots-main" id="bots-content">
-        {showEditor ? (
-          <BotEditor
-            key={editing === "edit" ? bot?.id : "new"}
-            bot={editing === "edit" ? bot : undefined}
-            machines={machines.data ?? []}
-            busy={save.isPending}
-            error={save.error?.message}
-            onSave={(input) => void saveProfile(input)}
-            onCancel={() => {
+        <Dialog
+          open={showEditor}
+          onOpenChange={(open) => {
+            if (!open && !save.isPending) {
               setEditing(null);
               save.reset();
-            }}
-          />
-        ) : bot ? (
+            }
+          }}
+        >
+          <DialogContent className="mm-bot-settings-dialog">
+            <DialogTitle>Bot settings</DialogTitle>
+            <DialogDescription>
+              Personalize your bot and connect the agent account on your
+              machine.
+            </DialogDescription>
+            <BotEditor
+              key={editing === "edit" ? bot?.id : "new"}
+              bot={editing === "edit" ? bot : undefined}
+              machines={machines.data ?? []}
+              busy={save.isPending}
+              error={save.error?.message}
+              onSave={(input) => void saveProfile(input)}
+              onCancel={() => {
+                setEditing(null);
+                save.reset();
+              }}
+            />
+            {editing === "edit" && (
+              <button
+                className="mm-settings-new-bot"
+                disabled={busy}
+                onClick={() => {
+                  setEditing("new");
+                  save.reset();
+                }}
+              >
+                Create another bot
+              </button>
+            )}
+          </DialogContent>
+        </Dialog>
+        {bots.isPending ? (
+          <div className="mm-bot-loading" role="status">
+            Loading your workspace…
+          </div>
+        ) : bots.error ? (
+          <div className="mm-bot-error" role="alert">
+            {bots.error.message}
+            <button onClick={() => void bots.refetch()}>Try again</button>
+          </div>
+        ) : (
           <>
             <header className="mm-bot-chat-header">
               <div>
                 <Bot size={18} />
                 <span>
-                  <strong>{bot.name}</strong>
+                  <strong>{bot?.name ?? "New conversation"}</strong>
                   <small>
-                    {bot.provider === "claude" ? "Claude Code" : "Codex"} ·{" "}
-                    {botMachine?.name ?? "Machine unavailable"} ·{" "}
-                    {botMachine?.status ?? "offline"}
+                    {bot
+                      ? bot.provider === "claude"
+                        ? "Claude Code"
+                        : "Codex"
+                      : "Your space to think"}
+                    {bot && " · "}
+                    {bot &&
+                      `${botMachine?.name ?? "Machine unavailable"} · ${botMachine?.status ?? "offline"}`}
                   </small>
                 </span>
               </div>
@@ -529,24 +587,28 @@ export function BotsWorkspace() {
                   title="Bot settings"
                   disabled={busy}
                   onClick={() => {
-                    setEditing("edit");
+                    setEditing(bot ? "edit" : "new");
                     save.reset();
                   }}
                 >
-                  <Settings2 size={17} />
+                  <Settings size={17} />
                 </button>
-                <button
-                  aria-label={
-                    conversationId ? "Delete conversation" : "Delete bot"
-                  }
-                  title={conversationId ? "Delete conversation" : "Delete bot"}
-                  disabled={busy || serverBusy}
-                  onClick={() =>
-                    setConfirmDelete(conversationId ? "conversation" : "bot")
-                  }
-                >
-                  <Trash2 size={16} />
-                </button>
+                {bot && (
+                  <button
+                    aria-label={
+                      conversationId ? "Delete conversation" : "Delete bot"
+                    }
+                    title={
+                      conversationId ? "Delete conversation" : "Delete bot"
+                    }
+                    disabled={busy || serverBusy || !bot}
+                    onClick={() =>
+                      setConfirmDelete(conversationId ? "conversation" : "bot")
+                    }
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
             </header>
             <div
@@ -563,32 +625,7 @@ export function BotsWorkspace() {
                   {conversation.error.message}
                 </p>
               ) : !messages.length && !optimistic ? (
-                <div className="mm-bot-welcome">
-                  <span className="mm-bot-mark">
-                    <Bot size={30} />
-                  </span>
-                  <p className="mm-bot-welcome-kicker">
-                    A little space to think
-                  </p>
-                  <h1>What’s on your mind?</h1>
-                  <p>
-                    Work through an idea, find a new angle,
-                    <br />
-                    or ask {bot.name} for a hand.
-                  </p>
-                  <div className="mm-bot-starters">
-                    {[
-                      "Help me think through an idea",
-                      "Explain something step by step",
-                      "Challenge my assumptions",
-                    ].map((prompt) => (
-                      <button key={prompt} onClick={() => setDraft(prompt)}>
-                        {prompt}
-                        <ChevronRight size={14} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <ChatWelcome onChoose={choosePrompt} />
               ) : (
                 <div className="mm-bot-message-list">
                   {messages.map((message) => (
@@ -597,7 +634,9 @@ export function BotsWorkspace() {
                       key={message.id}
                     >
                       <span className="mm-bot-message-author">
-                        {message.role === "user" ? "You" : bot.name}
+                        {message.role === "user"
+                          ? "You"
+                          : (bot?.name ?? "Assistant")}
                       </span>
                       <div>{message.content}</div>
                     </article>
@@ -612,7 +651,7 @@ export function BotsWorkspace() {
                   {(sending || serverBusy) && (
                     <div className="mm-bot-thinking" role="status">
                       <span />
-                      {bot.name} is thinking…
+                      {bot?.name ?? "Your bot"} is thinking…
                       <small>This can take up to two minutes.</small>
                     </div>
                   )}
@@ -620,7 +659,7 @@ export function BotsWorkspace() {
                 </div>
               )}
             </div>
-            <div className="mm-bot-composer-wrap">
+            <div className="mm-bot-composer-wrap" ref={composerRef}>
               {confirmDelete && (
                 <div
                   className="mm-bot-confirm"
@@ -670,72 +709,25 @@ export function BotsWorkspace() {
                   Retry last message
                 </button>
               )}
-              {botMachine?.status !== "running" && (
+              {bot && botMachine?.status !== "running" && (
                 <p className="mm-bot-offline">
                   Start this bot’s machine in{" "}
-                  <Link href="/dashboard">Mini Machines</Link> to chat.
+                  <Link href="/dashboard/machines">Mini Machines</Link> to chat.
                 </p>
               )}
-              <form
-                className="mm-bot-composer"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void submit(draft);
-                }}
-              >
-                <label className="sr-only" htmlFor="bot-message">
-                  Message {bot.name}
-                </label>
-                <textarea
-                  id="bot-message"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (
-                      e.key === "Enter" &&
-                      !e.shiftKey &&
-                      !e.nativeEvent.isComposing
-                    ) {
-                      e.preventDefault();
-                      void submit(draft);
-                    }
-                  }}
-                  placeholder={`Message ${bot.name}…`}
-                  rows={2}
-                  maxLength={4000}
-                  disabled={
-                    sending || serverBusy || botMachine?.status !== "running"
-                  }
-                />
-                <div>
-                  <span>
-                    {draft.length
-                      ? `${draft.length.toLocaleString()} / 4,000`
-                      : "Shift + Enter for a new line"}
-                  </span>
-                  <button
-                    aria-label="Send message"
-                    disabled={
-                      !draft.trim() ||
-                      sending ||
-                      serverBusy ||
-                      botMachine?.status !== "running"
-                    }
-                  >
-                    <ArrowUp size={19} />
-                  </button>
-                </div>
-              </form>
+              <ChatComposer
+                draft={draft}
+                onChange={setDraft}
+                onSubmit={() => void submit(draft)}
+                sending={sending || serverBusy}
+                disabled={!!bot && botMachine?.status !== "running"}
+                label={bot ? `Message ${bot.name}` : "Message your bot"}
+              />
               <p className="mm-bot-composer-note">
-                Conversation memory uses the latest 20 messages, within a size
-                limit. Replies may be inaccurate.
+                Replies may be inaccurate. Check anything important.
               </p>
             </div>
           </>
-        ) : (
-          <div className="mm-bot-loading" role="status">
-            Loading your workspace…
-          </div>
         )}
       </main>
     </div>

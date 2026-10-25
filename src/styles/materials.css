@@ -1,0 +1,432 @@
+/* Glass is a functional layer: controls and floating chrome catch the light;
+   content panels use quiet tints. No nested backdrop filters on data rows. */
+:root {
+  --background: #f5f6f8;
+  --foreground: #1b1d22;
+  --surface: #eceef2;
+  --muted: #eceef2;
+  --muted-foreground: #535c6b;
+  --border: #dce0e7;
+  --material-panel: color-mix(in srgb, var(--surface) 64%, var(--background));
+  --material-control: color-mix(in srgb, var(--card) 76%, var(--surface));
+  --material-floating: color-mix(in srgb, var(--card) 90%, transparent);
+  --material-glint: rgb(255 255 255 / 88%);
+  --material-edge: rgb(38 48 69 / 10%);
+  --material-shadow: 0 2px 5px rgb(24 33 52 / 9%);
+  --material-relief:
+    inset 0 1px 1px var(--material-glint), inset 0 -1px 1px var(--material-edge);
+  --material-shine: linear-gradient(
+    175deg,
+    rgb(255 255 255 / 17%),
+    transparent 46%
+  );
+  --material-primary-shine: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 14%),
+    transparent 55%
+  );
+  --material-focus: 0 0 0 3px color-mix(in srgb, var(--ring) 24%, transparent);
+}
+:root[data-theme="dark"] {
+  --background: #18191d;
+  --foreground: #edf0f5;
+  --surface: #202228;
+  --muted: #252830;
+  --muted-foreground: #b5bfce;
+  --border: #373c47;
+  --material-glint: rgb(255 255 255 / 16%);
+  --material-edge: rgb(0 0 0 / 30%);
+  --material-shadow: 0 2px 5px rgb(0 0 0 / 20%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --background: #18191d;
+    --foreground: #edf0f5;
+    --surface: #202228;
+    --muted: #252830;
+    --muted-foreground: #b5bfce;
+    --border: #373c47;
+    --material-glint: rgb(255 255 255 / 16%);
+    --material-edge: rgb(0 0 0 / 30%);
+    --material-shadow: 0 2px 5px rgb(0 0 0 / 20%);
+  }
+}
+
+/* Tactile controls: a fine specular lip rather than an outlined capsule. */
+.mm-ui-button:not([data-variant="link"]):not([data-variant="ghost"]),
+.mm-dashboard-button,
+.mm-bot-button,
+.mm-bot-composer button {
+  border: 0;
+  border-radius: 999px;
+  background-image: var(--material-primary-shine);
+  box-shadow: var(--material-relief), var(--material-shadow);
+  touch-action: manipulation;
+  transition:
+    background-color 160ms ease-out,
+    box-shadow 160ms ease-out,
+    transform 160ms ease-out;
+}
+.mm-ui-button[data-variant="default"] {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+.mm-ui-button:is([data-variant="outline"], [data-variant="secondary"]),
+.mm-dashboard-button-secondary,
+.mm-bot-button-secondary {
+  color: var(--foreground);
+  background-color: var(--material-control);
+  background-image: var(--material-shine);
+}
+.mm-ui-button[data-variant="destructive"],
+.mm-dashboard-button-danger {
+  color: var(--destructive);
+  background-color: var(--danger-soft);
+}
+.mm-ui-button[data-variant="ghost"],
+.mm-ui-button[data-variant="link"] {
+  background-image: none;
+  box-shadow: none;
+}
+.mm-ui-button[data-variant="ghost"] {
+  border-radius: 999px;
+}
+.mm-ui-button:focus-visible,
+.mm-dashboard-button:focus-visible,
+.mm-bot-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+@media (hover: hover) {
+  .mm-ui-button:not(:disabled):not([data-variant="link"]):hover,
+  .mm-dashboard-button:not(:disabled):hover,
+  .mm-bot-button:not(:disabled):hover {
+    transform: translateY(-1px);
+    filter: none;
+    box-shadow:
+      var(--material-relief),
+      0 3px 7px rgb(24 33 52 / 15%);
+  }
+}
+.mm-ui-button:not(:disabled):active,
+.mm-dashboard-button:not(:disabled):active,
+.mm-bot-button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+/* Inputs retain an inset edge and an unambiguous focus halo. */
+.mm-ui-input,
+.mm-git-workspace :is(input:not([type="checkbox"]), select, textarea),
+.mm-bot-editor :is(input, select, textarea),
+.mm-create-fields input,
+.mm-machine-search,
+.mm-template-search,
+.mm-fleet-sort select {
+  border: 0;
+  border-radius: 13px;
+  background: var(--material-control);
+  color: var(--foreground);
+  box-shadow:
+    inset 0 1px 2px var(--material-edge),
+    inset 0 -1px 0 var(--material-glint);
+  transition:
+    background-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+.mm-ui-input::placeholder {
+  color: var(--muted-foreground);
+  opacity: 1;
+}
+.mm-ui-input:focus-visible,
+.mm-git-workspace
+  :is(input:not([type="checkbox"]), select, textarea):focus-visible,
+.mm-bot-editor :is(input, select, textarea):focus-visible,
+.mm-create-fields input:focus-visible,
+.mm-machine-search:focus-within,
+.mm-template-search:focus-within {
+  box-shadow:
+    inset 0 1px 2px var(--material-edge),
+    var(--material-focus);
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.mm-machine-search input:focus-visible,
+.mm-template-search input:focus-visible {
+  outline: none;
+}
+.mm-ui-input[aria-invalid="true"] {
+  outline: 2px solid var(--destructive);
+  outline-offset: 2px;
+}
+
+/* Shared portal surfaces: enough opacity for legibility over arbitrary content. */
+[data-slot="dialog-content"],
+[data-slot="dropdown-menu-content"],
+[data-slot="dropdown-menu-sub-content"] {
+  border: 0;
+  border-radius: 16px;
+  background: var(--material-floating);
+  color: var(--foreground);
+  box-shadow:
+    var(--material-relief),
+    0 6px 18px rgb(17 26 44 / 14%);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+  overscroll-behavior: contain;
+}
+[data-slot="dialog-content"] {
+  padding: 20px;
+  gap: 14px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+[data-slot="dialog-overlay"] {
+  background: rgb(12 17 28 / 32%);
+}
+[data-slot="dialog-close"] {
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+[data-slot="dropdown-menu-content"],
+[data-slot="dropdown-menu-sub-content"] {
+  padding: 6px;
+}
+[data-slot^="dropdown-menu-"]:is(
+  [role="menuitem"],
+  [role="menuitemradio"],
+  [role="menuitemcheckbox"]
+) {
+  border-radius: 9px;
+  min-height: 34px;
+}
+.mm-create-dialog[data-slot="dialog-content"] {
+  padding: 0;
+}
+
+/* Broad content surfaces use tint, not a stack of outlined glass cards. */
+.mm-dashboard-sidebar,
+.mm-bots-sidebar {
+  background: var(--surface);
+  border-right: 0;
+}
+.mm-workspace-header,
+.mm-bots-header,
+.mm-bot-chat-header {
+  border-bottom: 0;
+}
+.mm-machine-table,
+.mm-fleet-empty,
+.mm-no-machines,
+.mm-git-repo-picker,
+.mm-git-split {
+  border: 0;
+  border-radius: 14px;
+  background: var(--material-panel);
+}
+.mm-git-list-pane {
+  border-right: 0;
+  background: var(--material-panel);
+}
+.mm-git-preview-pane {
+  background: var(--card);
+}
+.mm-git-compose {
+  border-bottom: 0;
+  padding: 12px;
+}
+.mm-machine-table-heading {
+  background: var(--surface);
+}
+.mm-machine-row + .mm-machine-row {
+  border-color: color-mix(in srgb, var(--border) 48%, transparent);
+}
+.mm-git-repo-picker {
+  gap: 12px;
+  padding: 12px;
+}
+.mm-git-tabs {
+  gap: 6px;
+  padding: 4px;
+  border: 0;
+  margin-bottom: 8px;
+  background: var(--material-panel);
+  border-radius: 14px;
+}
+.mm-git-tabs button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 10px;
+}
+.mm-git-tabs button[aria-pressed="true"] {
+  background: var(--material-control);
+  box-shadow: var(--material-relief);
+}
+.mm-git-tabs button span {
+  border: 0;
+  background: var(--hover);
+}
+.mm-dashboard-nav a {
+  min-height: 40px;
+  padding: 8px 12px;
+}
+.mm-dashboard-nav a[aria-current="page"] {
+  border-color: transparent;
+  background: var(--signal-soft);
+}
+.mm-account-avatar {
+  border: 0;
+}
+.mm-theme-toggle,
+.mm-machine-open :is(a, button) {
+  border: 0;
+  background: var(--material-control);
+  box-shadow: var(--material-relief);
+}
+.mm-template-option-content {
+  border: 0;
+  padding: 12px;
+  background: var(--material-panel);
+}
+.mm-template-option input:checked + span {
+  background: var(--signal-soft);
+  box-shadow: inset 0 0 0 2px var(--signal);
+}
+.mm-fleet-filters button {
+  border: 0;
+}
+.mm-fleet-filters button[aria-pressed="true"] {
+  background: var(--material-control);
+  box-shadow: var(--material-relief);
+}
+.mm-bot-starters button {
+  border: 0;
+  background: var(--material-panel);
+}
+.mm-bot-composer {
+  border: 0;
+  border-radius: 16px;
+  background: var(--material-control);
+  box-shadow: var(--material-relief), var(--material-shadow);
+  padding: 12px 14px;
+}
+.mm-bot-composer:focus-within {
+  box-shadow: var(--material-relief), var(--material-focus);
+}
+.mm-bot-composer-wrap {
+  border-top: 0;
+}
+.mm-bot-editor {
+  padding: 24px;
+}
+.mm-dashboard-content {
+  padding: 24px;
+}
+.mm-fleet-toolbar {
+  gap: 12px;
+}
+.mm-machine-table-heading,
+.mm-machine-row {
+  padding-inline: 16px;
+}
+.mm-page-menu [aria-current="page"] {
+  background: var(--signal-soft);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  [data-slot="dialog-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="dropdown-menu-sub-content"] {
+    background: var(--popover);
+  }
+}
+@media (max-width: 700px) {
+  .mm-dashboard-content {
+    padding: 16px 16px 28px;
+  }
+  .mm-dashboard-sidebar {
+    background: transparent;
+  }
+  .mm-bot-editor {
+    padding: 16px;
+  }
+  .mm-bot-composer {
+    padding: 10px 12px;
+  }
+  .mm-git-tabs button {
+    min-height: 44px;
+  }
+}
+@media (pointer: coarse) {
+  .mm-ui-button,
+  .mm-ui-input,
+  [data-slot="dialog-close"],
+  [data-slot^="dropdown-menu-"]:is(
+    [role="menuitem"],
+    [role="menuitemradio"],
+    [role="menuitemcheckbox"]
+  ) {
+    min-height: 44px;
+  }
+  .mm-ui-button[data-size="icon"],
+  [data-slot="dialog-close"] {
+    min-width: 44px;
+  }
+  .mm-ui-input {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mm-ui-button,
+  .mm-dashboard-button,
+  .mm-bot-button,
+  .mm-ui-input,
+  [data-slot="dialog-content"],
+  [data-slot="dialog-overlay"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="dropdown-menu-sub-content"] {
+    animation: none;
+    transition: none;
+  }
+  .mm-ui-button:not(:disabled):is(:hover, :active),
+  .mm-dashboard-button:not(:disabled):is(:hover, :active),
+  .mm-bot-button:not(:disabled):is(:hover, :active) {
+    transform: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  [data-slot="dialog-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="dropdown-menu-sub-content"] {
+    background: var(--popover);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+@media (forced-colors: active) {
+  .mm-ui-button,
+  .mm-dashboard-button,
+  .mm-bot-button,
+  .mm-ui-input,
+  .mm-machine-search,
+  .mm-template-search,
+  .mm-git-workspace :is(input, select, textarea),
+  .mm-bot-editor :is(input, select, textarea),
+  .mm-create-fields input,
+  .mm-fleet-sort select,
+  [data-slot="dialog-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="dropdown-menu-sub-content"] {
+    border: 1px solid ButtonText;
+    box-shadow: none;
+    background-image: none;
+  }
+  .mm-ui-input:focus-visible,
+  .mm-ui-button:focus-visible {
+    outline: 2px solid Highlight;
+  }
+}

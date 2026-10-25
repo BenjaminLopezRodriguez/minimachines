@@ -1,3 +1,6 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import { BrandMark } from "~/components/brand-mark";
 import { ThemeToggle } from "~/components/theme-toggle";
 import { ArrowUpRight, LogOut } from "lucide-react";
@@ -18,6 +21,8 @@ export function DashboardFrame({
   signOutAction?: () => Promise<void>;
   navigationPath?: string;
 }) {
+  const pathname = usePathname();
+  if (pathname === "/dashboard") return <>{children}</>;
   return (
     <div className="mm-app mm-dashboard-shell">
       <a href="#dashboard-content" className="mm-dashboard-skip">
