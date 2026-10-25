@@ -47,7 +47,7 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
     <Workspace
       project={{ id, name: project?.name ?? "project", repoKey: project?.repoKey ?? null }}
       access={access}
-      me={{ name: user.firstName || me.name || user.email }}
+      me={{ name: (user.firstName ?? "").trim() || me.name }}
       machine={machine ? { id: machine.id, name: machine.name, status: machine.status, appUrl: machine.appUrl ?? null, consoleUrl: machine.emulatorUrl ?? null } : null}
       refreshToken={refreshToken.bind(null, id)}
     />

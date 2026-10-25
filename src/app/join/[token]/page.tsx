@@ -25,9 +25,15 @@ function mask(channel: string, contact: string): string {
   return `${contact.slice(0, 2)}•••••${contact.slice(-4)}`;
 }
 
+/** A form field as a string; files and missing fields become "". */
+const field = (form: FormData, name: string) => {
+  const v = form.get(name);
+  return typeof v === "string" ? v : "";
+};
+
 async function sendCodeAction(formData: FormData) {
   "use server";
-  const token = String(formData.get("token") ?? "");
+  const token = field(formData, "token");
   const { user } = await withAuth();
   if (!user?.id) redirect(`/join/${token}`);
   const issued = await issueJoinCode(token);
@@ -38,8 +44,8 @@ async function sendCodeAction(formData: FormData) {
 
 async function joinAction(formData: FormData) {
   "use server";
-  const token = String(formData.get("token") ?? "");
-  const code = String(formData.get("code") ?? "") || undefined;
+  const token = field(formData, "token");
+  const code = field(formData, "code") || undefined;
   // Re-check auth inside the action — never trust the render-time user.
   const { user } = await withAuth();
   if (!user?.id) redirect(`/join/${token}`);

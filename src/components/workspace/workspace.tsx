@@ -14,12 +14,17 @@ import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { ExternalLink, FilePlus2, FileText, Folder, Link2, RotateCw, SquareTerminal, Trash2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { yCollab } from "y-codemirror.next";
 import YProvider from "y-partyserver/provider";
 import * as Y from "yjs";
 
-import { Board } from "./board";
+// Excalidraw needs the browser; it's also large, so it only loads when the Board tab opens.
+const Board = dynamic(() => import("./board").then((m) => m.Board), {
+  ssr: false,
+  loading: () => <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading whiteboard…</div>,
+});
 
 type Access = { host: string; secure: boolean; room: string; token: string; role: "owner" | "member" | "viewer" };
 type Peer = { id: number; name: string; color: string; file?: string; kind?: string };
@@ -27,9 +32,9 @@ type Peer = { id: number; name: string; color: string; file?: string; kind?: str
 const COLORS = ["#3558f5", "#e5484d", "#12a594", "#f76b15", "#8e4ec6", "#d6409f", "#0090ff", "#46a758"];
 
 function languageFor(path: string): Extension {
-  if (/\.(m|c)?[jt]sx?$/.test(path)) return javascript({ jsx: /x$/.test(path), typescript: /tsx?$/.test(path) });
+  if (/\.(m|c)?[jt]sx?$/.test(path)) return javascript({ jsx: path.endsWith("x"), typescript: path.endsWith(".ts") || path.endsWith(".tsx") });
   if (/\.(css|scss)$/.test(path)) return css();
-  if (/\.json$/.test(path)) return json();
+  if (path.endsWith(".json")) return json();
   if (/\.(md|mdx)$/.test(path)) return markdown();
   return [];
 }
@@ -152,6 +157,7 @@ export function Workspace(props: {
       });
       setPeers(list);
     };
+    if (provider.wsconnected) setStatus("live"); // may have connected before this listener existed
     provider.on("status", onStatus);
     provider.on("sync", onSync);
     files.observe(onFiles);
@@ -172,7 +178,7 @@ export function Workspace(props: {
     const view = new EditorView({
       parent: editorEl.current,
       state: EditorState.create({
-        doc: ytext.toString(),
+        doc: ytext.toJSON(),
         extensions: [
           basicSetup,
           languageFor(open),
@@ -255,7 +261,7 @@ export function Workspace(props: {
       </header>
 
       {view === "board" ? (
-        <Board doc={doc} readOnly={readOnly} me={props.me.name} agents={peers.filter((p) => p.kind === "agent")} />
+        <Board doc={doc} awareness={provider.awareness} readOnly={readOnly} me={props.me.name} />
       ) : (
       <div className="flex min-h-0 flex-1">
         <aside className="hidden w-60 shrink-0 flex-col border-r md:flex">
