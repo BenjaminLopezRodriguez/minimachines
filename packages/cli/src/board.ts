@@ -15,13 +15,13 @@
  * files but not run commands; the deploy command only ever comes from this
  * command line, never from the board.
  */
-import { spawn } from "node:child_process";
 import { hostname } from "node:os";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 
 import * as Y from "yjs";
 
+import { shellFor, spawnProgram } from "./proc.js";
 import { askText, choose, isInteractive, missing } from "./prompts.js";
 import { connect, ensureProject, runSync } from "./sync.js";
 
@@ -93,19 +93,19 @@ type Engine = { label: string; run: (prompt: string, dir: string, onLog: (line: 
 /** Run a process in `dir`, feeding stdout lines to `onLine`; resolves with all stdout, rejects on a non-zero exit. */
 function runProcess(cmd: string, args: string[], dir: string, onLine: (l: string) => void, timeoutMs = 20 * 60 * 1000): Promise<string> {
   return new Promise((done, fail) => {
-    const child = spawn(cmd, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"], env: process.env });
+    const child = spawnProgram(cmd, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"], env: process.env });
     let out = "";
     let err = "";
     let buf = "";
     const timer = setTimeout(() => child.kill("SIGTERM"), timeoutMs);
-    child.stdout.on("data", (d: Buffer) => {
+    child.stdout!.on("data", (d: Buffer) => {
       out += d;
       buf += d;
       const lines = buf.split("\n");
       buf = lines.pop() ?? "";
       for (const l of lines) if (l.trim()) onLine(l);
     });
-    child.stderr.on("data", (d: Buffer) => (err += d));
+    child.stderr!.on("data", (d: Buffer) => (err += d));
     child.on("error", (e) => (clearTimeout(timer), fail(e)));
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -374,7 +374,8 @@ async function work(dirArg: string | undefined, o: { flag: (n: string) => string
     console.log(`⇡ deploying for #${c.id}`);
     appendLog(c.id, `$ ${deployCmd}`);
     try {
-      const out = await runProcess(process.env.SHELL || "sh", ["-c", deployCmd!], dir, (l) => appendLog(c.id, l.slice(0, 200)));
+      const sh = shellFor(deployCmd!); // PowerShell on Windows, bash/sh elsewhere
+      const out = await runProcess(sh.cmd, sh.args, dir, (l) => appendLog(c.id, l.slice(0, 200)));
       const url = deployUrlFrom(out);
       set(c.id, { deployedAt: Date.now(), deployUrl: url, claimedBy: undefined });
       console.log(`✓ #${c.id} live${url ? ` at ${url}` : ""}`);

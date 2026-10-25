@@ -4,7 +4,7 @@
  * your local Claude Code headless in the current folder (edits only), one
  * session per conversation. Faces subscribe to state and call send/stop.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -12,6 +12,7 @@ import { join } from "node:path";
 import * as Y from "yjs";
 
 import { addCard } from "./board.js";
+import { spawnProgram } from "./proc.js";
 import { connect, projectForDir } from "./sync.js";
 
 type Api = (method: string, path: string, body?: unknown) => Promise<Response>;
@@ -44,7 +45,7 @@ function claudeTurn(opts: { prompt: string; session: string; resume: boolean; na
     "Reply in one to four short, warm sentences. When asked to do something, do it with your tools, then say what you did. " +
     "You can read and edit files in this folder; if a task needs commands you can't run, say which command the user should run.";
   const args = ["-p", opts.prompt, "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", "--append-system-prompt", persona, ...(opts.resume ? ["--resume", opts.session] : ["--session-id", opts.session])];
-  const child = spawn("claude", args, { cwd: process.cwd(), stdio: ["ignore", "pipe", "pipe"], env: process.env });
+  const child = spawnProgram("claude", args, { cwd: process.cwd(), stdio: ["ignore", "pipe", "pipe"], env: process.env });
   const done = new Promise<string>((resolve, reject) => {
     let buf = "";
     let result = "";

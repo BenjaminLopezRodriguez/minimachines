@@ -1,0 +1,66 @@
+name: CLI
+
+# The published CLI must work on Windows, macOS and Linux. This builds it,
+# runs its self-checks, then installs the packed tarball globally and runs it
+# the way a user would (from PowerShell on Windows, through npm's mm.cmd).
+on:
+  push:
+    paths: ["packages/cli/**", "public/skills/**", ".github/workflows/cli.yml"]
+  pull_request:
+    paths: ["packages/cli/**", "public/skills/**", ".github/workflows/cli.yml"]
+  workflow_dispatch:
+
+jobs:
+  cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install (CLI only)
+        run: pnpm install --frozen-lockfile --filter @minimachines/cli...
+      - name: Build
+        run: pnpm --filter @minimachines/cli build
+      - name: Self-checks
+        working-directory: packages/cli
+        run: |
+          node dist/proc.js --demo
+          node dist/cli.js tui --test
+          npx tsx src/sync.ts --demo
+          npx tsx src/board.ts --demo
+          npx tsx src/people.ts --demo
+      - name: Pack and install globally
+        working-directory: packages/cli
+        shell: bash
+        run: |
+          npm pack
+          npm install -g ./minimachines-cli-*.tgz
+      - name: Run the installed CLI (PowerShell)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          mm --version
+          mm --help | Select-Object -First 3
+          mm tui --test
+          $out = mm --no-tui stop 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1, got $LASTEXITCODE" }
+          if ($out -notmatch "Not logged in") { throw "unexpected output: $out" }
+          Write-Output "missing-login path ok"
+      - name: Run the installed CLI
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mm --version
+          mm --help | head -3
+          mm tui --test
+          set +e; out=$(mm --no-tui stop 2>&1); code=$?; set -e
+          [ "$code" = 1 ] || { echo "expected exit 1, got $code"; exit 1; }
+          echo "$out" | grep -q "Not logged in" || { echo "unexpected output: $out"; exit 1; }
+          echo "missing-login path ok"
