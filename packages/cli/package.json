@@ -1,6 +1,6 @@
 {
   "name": "@minimachines/cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "CLI to attach to minimachin.es machine sessions",
   "type": "module",
   "bin": {
