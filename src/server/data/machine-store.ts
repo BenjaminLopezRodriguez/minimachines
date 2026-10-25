@@ -16,6 +16,7 @@ import {
 import { createAgentKey, revokeAgentKey } from "./api-keys";
 import type { Machine, MachineStatus } from "./machines";
 import { modalEnabled, provisionMachine, terminateMachine } from "./modal-driver";
+import { machineSecrets } from "./secrets";
 import { getTemplate, loadTemplates } from "./templates";
 
 /** Env the in-sandbox agent utilities (pager, exec) need to call back home. */
@@ -177,8 +178,9 @@ export async function createMachine(
     try {
       // Scoped key so the in-sandbox agent (pager, exec) authenticates as the
       // owner. Only minted when there is an owner to scope to.
+      // Provider keys first, so the platform's own vars always win.
       const agent = input.ownerUserId
-        ? agentEnv(id, await createAgentKey(input.ownerUserId, id))
+        ? { ...(await machineSecrets(input.ownerUserId)), ...agentEnv(id, await createAgentKey(input.ownerUserId, id)) }
         : undefined;
       const provisioned = await provisionMachine({
         cpu: template.resources.cpu,
@@ -306,7 +308,7 @@ export async function restartMachine(
   if (modalEnabled()) {
     try {
       const agent = row.ownerUserId
-        ? agentEnv(row.id, await createAgentKey(row.ownerUserId, row.id))
+        ? { ...(await machineSecrets(row.ownerUserId)), ...agentEnv(row.id, await createAgentKey(row.ownerUserId, row.id)) }
         : undefined;
       const p = await provisionMachine({
         cpu: row.cpu,

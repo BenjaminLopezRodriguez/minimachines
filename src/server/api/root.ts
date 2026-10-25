@@ -1,5 +1,7 @@
 import { apiKeysRouter } from "~/server/api/routers/apiKeys";
 import { machinesRouter } from "~/server/api/routers/machines";
+import { orgsRouter } from "~/server/api/routers/orgs";
+import { secretsRouter } from "~/server/api/routers/secrets";
 import { gitRouter } from "~/server/api/routers/git";
 import { botsRouter } from "~/server/api/routers/bots";
 import { partnersRouter } from "~/server/api/routers/partners";
@@ -19,6 +21,8 @@ export const appRouter = createTRPCRouter({
   git: gitRouter,
   bots: botsRouter,
   apiKeys: apiKeysRouter,
+  orgs: orgsRouter,
+  secrets: secretsRouter,
   partners: partnersRouter,
   shares: sharesRouter,
   push: pushRouter,

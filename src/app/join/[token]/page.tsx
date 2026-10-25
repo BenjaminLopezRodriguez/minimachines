@@ -1,6 +1,6 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { redirect } from "next/navigation";
-import { FolderGit2, XCircle } from "lucide-react";
+import { FolderGit2, Users, XCircle } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { deliverCode, displayName } from "~/server/data/invite-delivery";
@@ -50,7 +50,7 @@ async function joinAction(formData: FormData) {
   const { user } = await withAuth();
   if (!user?.id) redirect(`/join/${token}`);
   const result = await acceptInvite({ token, userId: user.id, code });
-  if (result.ok) redirect(`/p/${result.projectId}`); // straight into the live workspace
+  if (result.ok) redirect("orgId" in result ? "/dashboard/team" : `/p/${result.projectId}`); // projects open straight into the live workspace
   redirect(`/join/${token}?${code ? "sent=1&" : ""}error=${result.reason}`);
 }
 
@@ -87,28 +87,31 @@ export default async function JoinPage({
     );
   }
 
-  const { invite, project } = found;
+  const { invite, project, org } = found;
   const inviter = (await displayName(invite.invitedBy)).name;
   const access = invite.role === "viewer" ? "view" : "work on";
+  const name = project ? project.name : org.name;
 
   return (
     <div className="mx-auto max-w-md px-4 pb-20 pt-10">
       <Panel>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <FolderGit2 className="size-4" aria-hidden />
-          <span>Project invite</span>
+          {project ? <FolderGit2 className="size-4" aria-hidden /> : <Users className="size-4" aria-hidden />}
+          <span>{project ? "Project invite" : "Team invite"}</span>
         </div>
         <h1 className="mt-4 text-lg font-medium tracking-tight">
-          {inviter} invited you to {access} {project.name}
+          {project ? `${inviter} invited you to ${access} ${name}` : `${inviter} invited you to join the ${name} team`}
         </h1>
-        {project.repoKey && (
+        {project?.repoKey && (
           <p className="mt-1 font-mono text-sm text-muted-foreground">{project.repoKey}</p>
         )}
         {invite.note && <p className="mt-4 text-sm">“{invite.note}”</p>}
         <p className="mt-4 text-sm text-muted-foreground">
-          {invite.role === "viewer"
-            ? "You'll be able to see this project's machines and logs, but not run commands."
-            : "You'll be able to run commands, move files and share apps on this project's machines."}
+          {!project
+            ? "Teammates can add each other to projects directly, without an invite link."
+            : invite.role === "viewer"
+              ? "You'll be able to see this project's machines and logs, but not run commands."
+              : "You'll be able to run commands, move files and share apps on this project's machines."}
         </p>
 
         {error && (
@@ -142,7 +145,7 @@ export default async function JoinPage({
               </label>
             )}
             <Button type="submit" className="w-full">
-              Join {project.name}
+              Join {project ? name : `the ${name} team`}
             </Button>
           </form>
         )}

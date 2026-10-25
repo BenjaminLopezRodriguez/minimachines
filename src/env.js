@@ -32,6 +32,8 @@ export const env = createEnv({
     // Either a read-write token, or a store id with OIDC on Vercel. Unset → binaries stay local.
     BLOB_READ_WRITE_TOKEN: z.string().optional(),
     BLOB_STORE_ID: z.string().optional(),
+    // Encrypts users' provider keys (base64 of 32 random bytes). Unset → provider keys are off.
+    SECRETS_KEY: z.string().optional(),
     // Live project rooms (packages/sync). Unset → collaboration is off.
     SYNC_URL: z.string().url().optional(),
     SYNC_SECRET: z.string().min(32).optional(),
@@ -70,6 +72,7 @@ export const env = createEnv({
     APP_BASE_URL: process.env.APP_BASE_URL,
     BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
     BLOB_STORE_ID: process.env.BLOB_STORE_ID,
+    SECRETS_KEY: process.env.SECRETS_KEY,
     SYNC_URL: process.env.SYNC_URL,
     SYNC_SECRET: process.env.SYNC_SECRET,
     VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,

@@ -11,8 +11,10 @@ type Api = (method: string, path: string, body?: unknown) => Promise<Response>;
 type Project = { id: string; name: string; repoKey: string | null };
 type Member = { principal: string; role: string; name: string; email: string | null };
 type Pending = { id: string; channel: "email" | "sms"; contact: string; role: string; createdAt: string; expiresAt: string };
-type Author = { n: number; name: string; email: string; commits: number; usable: boolean };
-type Contact = { email: string } | { phone: string } | { agentMachineId: string };
+/** A numbered row: a teammate with an account (userId set) or a git author. */
+type Author = { n: number; name: string; email: string; commits: number; usable: boolean; userId?: string; team?: string };
+type Teammate = { userId: string; name: string; email: string | null; team: string };
+type Contact = { email: string } | { phone: string } | { agentMachineId: string } | { userId: string; name: string };
 type InviteResult = { contact: string; channel?: string; status: string; message?: string; error?: string; role?: string };
 
 const PHONE = /^\+[1-9]\d{6,14}$/;
@@ -56,6 +58,25 @@ export function gitAuthors(): Author[] {
 }
 
 /**
+ * Rows for the picker: teammates first (they can be added directly), then git
+ * authors who aren't already teammates. A git author who is a teammate shows
+ * once, as the teammate, with their commit count.
+ */
+export function candidates(teammates: Teammate[], authors: Omit<Author, "n">[]): Author[] {
+  const byEmail = new Map(authors.map((a) => [a.email, a]));
+  const team = teammates.map((t) => ({
+    name: t.name,
+    email: t.email?.toLowerCase() ?? "",
+    commits: (t.email && byEmail.get(t.email.toLowerCase())?.commits) || 0,
+    usable: true,
+    userId: t.userId,
+    team: t.team,
+  }));
+  const emails = new Set(team.map((t) => t.email).filter(Boolean));
+  return [...team, ...authors.filter((a) => !emails.has(a.email))].map((a, i) => ({ ...a, n: i + 1 }));
+}
+
+/**
  * Parse `+ 2 sam@lee.io +14155550123 agent:vm_ab12` and `- 1 ana@acme.dev`.
  * A bare `+`/`-` token switches mode; a row whose git email is a noreply takes
  * the next email/phone as its contact (`+ 3 kim@ota.dev`).
@@ -87,6 +108,8 @@ export function parseOps(tokens: string[], authors: Author[]) {
       if (mode === "+" && next && (EMAIL.test(next) || PHONE.test(next.replace(/[\s().-]/g, "")))) {
         i++;
         contact = EMAIL.test(next) ? { email: next } : { phone: next.replace(/[\s().-]/g, "") };
+      } else if (mode === "+" && a.userId) {
+        contact = { userId: a.userId, name: a.name };
       } else if (a.usable) {
         contact = { email: a.email };
       } else {
@@ -94,7 +117,9 @@ export function parseOps(tokens: string[], authors: Author[]) {
         continue;
       }
     } else if (EMAIL.test(t)) {
-      contact = { email: t };
+      // Someone on your team already has an account: add them directly instead of inviting.
+      const mate = mode === "+" ? authors.find((a) => a.userId && a.email === t.toLowerCase()) : undefined;
+      contact = mate?.userId ? { userId: mate.userId, name: mate.name } : { email: t };
     } else if (PHONE.test(t.replace(/[\s().-]/g, ""))) {
       contact = { phone: t.replace(/[\s().-]/g, "") };
     } else if (mode === "+" && /^agent:[\w-]+$/.test(t)) {
@@ -111,7 +136,7 @@ export function parseOps(tokens: string[], authors: Author[]) {
 }
 
 function label(c: Contact): string {
-  return "email" in c ? c.email : "phone" in c ? c.phone : `agent:${c.agentMachineId}`;
+  return "email" in c ? c.email : "phone" in c ? c.phone : "userId" in c ? c.name : `agent:${c.agentMachineId}`;
 }
 
 function ago(iso: string): string {
@@ -158,7 +183,10 @@ export async function peopleCommand(
   const { project } = (await (await deps.api("PUT", "/api/v1/projects", { name, repoKey })).json()) as {
     project: Project;
   };
-  const authors = named ? [] : gitAuthors();
+  // Teammates with accounts come from the website; older servers without teams just have none.
+  const teamRes = await deps.api("GET", "/api/v1/orgs").catch(() => null);
+  const teammates = teamRes?.ok ? ((await teamRes.json()) as { teammates: Teammate[] }).teammates : [];
+  const authors = candidates(teammates, named ? [] : gitAuthors());
 
   const load = async () =>
     (await (await deps.api("GET", `/api/v1/projects/${project.id}/people`)).json()) as {
@@ -177,14 +205,21 @@ export async function peopleCommand(
       for (const x of p.pending)
         console.log(`     ${x.contact.padEnd(49)} ${x.channel === "email" ? "email" : "text"} invite · ${ago(x.createdAt)} · ${x.role}`);
     }
-    if (authors.length) {
+    const memberIds = new Set(p.members.map((m) => m.principal));
+    const row = (a: Author) => {
+      const status = (a.userId && memberIds.has(a.userId)) || memberEmails.has(a.email) ? "member" : pendingSet.has(a.email) ? "pending" : a.usable ? "" : "needs email or phone";
+      const extra = a.userId ? a.team ?? "" : `${String(a.commits).padStart(4)} commits`;
+      console.log(`  ${String(a.n).padStart(2)} ${a.name.slice(0, 20).padEnd(20)} ${(a.usable ? a.email : "(github noreply)").padEnd(28)} ${extra}  ${status}`);
+    };
+    const team = authors.filter((a) => a.userId);
+    const git = authors.filter((a) => !a.userId);
+    if (team.length) {
+      console.log("  FROM YOUR TEAM (have accounts — added directly)");
+      team.forEach(row);
+    }
+    if (git.length) {
       console.log("  FROM GIT (12 mo)");
-      for (const a of authors) {
-        const status = memberEmails.has(a.email) ? "member" : pendingSet.has(a.email) ? "pending" : a.usable ? "" : "needs email or phone";
-        console.log(
-          `  ${String(a.n).padStart(2)} ${a.name.slice(0, 20).padEnd(20)} ${(a.usable ? a.email : "(github noreply)").padEnd(28)} ${String(a.commits).padStart(4)} commits  ${status}`,
-        );
-      }
+      git.forEach(row);
     }
   };
 
@@ -205,8 +240,21 @@ export async function peopleCommand(
           return;
         }
       }
-      const res = await deps.api("POST", `/api/v1/projects/${project.id}/invites`, { contacts: add, role, note });
-      const { invites } = (await res.json()) as { invites: InviteResult[] };
+      const direct = add.filter((c): c is { userId: string; name: string } => "userId" in c);
+      if (direct.length) {
+        const res = await deps.api("POST", `/api/v1/projects/${project.id}/members`, { userIds: direct.map((c) => c.userId), role });
+        const body = (await res.json()) as { members?: { userId: string; status: string; notified?: boolean; error?: string }[]; error?: { message: string } };
+        if (!res.ok) console.error(`  ✗ ${body.error?.message ?? res.status}`);
+        for (const m of body.members ?? []) {
+          const who = direct.find((c) => c.userId === m.userId)?.name ?? m.userId;
+          if (m.status === "added") console.log(`  ✓ added ${who}${m.notified ? " — emailed them the link" : ""}`);
+          else if (m.status === "already") console.log(`  · ${who} is already in ${project.name}`);
+          else console.error(`  ✗ ${who}: ${m.error ?? m.status}`);
+        }
+      }
+      const invitesOnly = add.filter((c) => !("userId" in c));
+      const res = invitesOnly.length ? await deps.api("POST", `/api/v1/projects/${project.id}/invites`, { contacts: invitesOnly, role, note }) : null;
+      const { invites } = res ? ((await res.json()) as { invites: InviteResult[] }) : { invites: [] };
       for (const r of invites) {
         if (r.status === "sent") console.log(`  ✓ ${r.channel === "sms" ? "texted" : "emailed"} ${r.contact}`);
         else if (r.status === "added") console.log(`  ✓ ${r.contact} can now view ${project.name}`);
@@ -240,14 +288,14 @@ export async function peopleCommand(
   }
   const people = await load();
   if (json) {
-    console.log(JSON.stringify({ project, ...people, authors }, null, 2));
+    console.log(JSON.stringify({ project, ...people, teammates, authors }, null, 2));
     return;
   }
   render(people);
   if (!process.stdin.isTTY) return;
 
   console.log(
-    "\n  + 2  invite row 2 · + a@b.dev · + +14155550123 · + agent:<machine> · - 1  revoke\n  Enter on an empty line to quit\n",
+    "\n  + 2  add/invite row 2 · + a@b.dev · + +14155550123 · + agent:<machine> · - 1  revoke\n  Enter on an empty line to quit\n",
   );
   for (;;) {
     const line = (await ask("> ")).trim();
@@ -274,6 +322,16 @@ function demo() {
   assert.equal(parseOps(["+", "2"], authors).errors.length, 1, "noreply row needs a contact");
   assert.equal(parseOps(["2"], authors).errors.length, 1, "needs + or -");
   assert.equal(repoKeyFromRemote("git@github.com:Acme/App.git"), "github.com/acme/app");
+
+  // Teammates come first and replace their own git row; their rows add directly.
+  const rows = candidates([{ userId: "u_kim", name: "Kim Ota", email: "Kim@ota.dev", team: "Acme" }], [
+    { name: "Ana", email: "ana@acme.dev", commits: 9, usable: true },
+    { name: "Kim", email: "kim@ota.dev", commits: 4, usable: true },
+  ]);
+  assert.deepEqual(rows.map((x) => [x.n, x.name, x.commits]), [[1, "Kim Ota", 4], [2, "Ana", 9]]);
+  assert.deepEqual(parseOps(["+", "1", "2"], rows).add, [{ userId: "u_kim", name: "Kim Ota" }, { email: "ana@acme.dev" }]);
+  assert.deepEqual(parseOps(["+", "KIM@ota.dev"], rows).add, [{ userId: "u_kim", name: "Kim Ota" }], "a teammate's email adds directly");
+  assert.deepEqual(parseOps(["-", "1"], rows).remove, ["kim@ota.dev"], "removing a teammate row goes by email");
   console.log("people demo ok");
 }
 

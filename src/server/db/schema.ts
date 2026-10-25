@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, pgTableCreator, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
+import { check, index, pgTableCreator, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
 
 /**
  * Multi-project schema feature of Drizzle ORM — lets the same database
@@ -395,7 +395,9 @@ export const projectInvites = createTable(
   "project_invite",
   (d) => ({
     id: d.uuid().primaryKey().defaultRandom(),
-    projectId: d.uuid().notNull(),
+    /** Exactly one of projectId / orgId: an invite joins a project or a team. */
+    projectId: d.uuid(),
+    orgId: d.uuid(),
     tokenHash: d.varchar({ length: 64 }).notNull(),
     role: d.varchar({ length: 16 }).notNull(), // member | viewer
     channel: d.varchar({ length: 8 }).notNull(), // email | sms
@@ -421,5 +423,54 @@ export const projectInvites = createTable(
   (t) => [
     uniqueIndex("project_invite_token_idx").on(t.tokenHash),
     index("project_invite_project_idx").on(t.projectId),
+    index("project_invite_org_idx").on(t.orgId),
+    check("project_invite_one_target", sql`("projectId" IS NULL) <> ("orgId" IS NULL)`),
   ],
+);
+
+/** A team: people who work together across projects. Members can be added to each other's projects directly. */
+export const organizations = createTable("organization", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  name: d.varchar({ length: 80 }).notNull(),
+  ownerUserId: d.varchar({ length: 128 }).notNull(),
+  createdAt: d
+    .timestamp({ withTimezone: true })
+    .$defaultFn(() => new Date())
+    .notNull(),
+}));
+
+/** Roles: owner (one, the creator) | admin (manages people) | member. */
+export const organizationMembers = createTable(
+  "organization_member",
+  (d) => ({
+    orgId: d.uuid().notNull(),
+    userId: d.varchar({ length: 128 }).notNull(),
+    role: d.varchar({ length: 16 }).notNull(),
+    invitedBy: d.varchar({ length: 128 }),
+    joinedAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [primaryKey({ columns: [t.orgId, t.userId] }), index("organization_member_user_idx").on(t.userId)],
+);
+
+/**
+ * A user's provider keys (ANTHROPIC_API_KEY, GITHUB_TOKEN, …), injected as env
+ * vars into machines they create. AES-256-GCM with SECRETS_KEY; only the last
+ * four characters are ever shown back.
+ */
+export const userSecrets = createTable(
+  "user_secret",
+  (d) => ({
+    userId: d.varchar({ length: 128 }).notNull(),
+    name: d.varchar({ length: 64 }).notNull(),
+    ciphertext: d.text().notNull(), // base64: iv(12) ‖ tag(16) ‖ data
+    lastFour: d.varchar({ length: 4 }).notNull(),
+    updatedAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [primaryKey({ columns: [t.userId, t.name] })],
 );

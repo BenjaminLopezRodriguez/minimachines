@@ -81,7 +81,7 @@ export async function POST(request: Request, ctx: Ctx) {
       const inviter = (await displayName(auth.userId)).name;
       for (const { invite, token } of minted) {
         try {
-          const delivery = await deliverInvite({ inviter, project, invite, token });
+          const delivery = await deliverInvite({ inviter, target: { kind: "project", project }, invite, token });
           results.push({ id: invite.id, contact: invite.contact, channel: invite.channel, role: invite.role, ...delivery });
         } catch (err) {
           results.push({
