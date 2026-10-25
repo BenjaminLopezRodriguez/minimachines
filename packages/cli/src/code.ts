@@ -11,6 +11,8 @@ import { createInterface } from "node:readline/promises";
 
 import Anthropic from "@anthropic-ai/sdk";
 
+import { isWindows, shellFor } from "./proc.js";
+
 type Api = (method: string, path: string, body?: unknown) => Promise<Response>;
 
 export const CODE_MODEL = "claude-opus-5-5";
@@ -39,7 +41,8 @@ function localBackend(root: string): Backend {
     label: root,
     bash: (command) =>
       new Promise((resolve) => {
-        execFile("bash", ["-lc", command], { cwd: root, timeout: 120_000, maxBuffer: 8 << 20 }, (err, stdout, stderr) => {
+        const sh = shellFor(command); // PowerShell on Windows, bash elsewhere
+        execFile(sh.cmd, sh.args, { cwd: root, timeout: 120_000, maxBuffer: 8 << 20, windowsHide: true }, (err, stdout, stderr) => {
           const code = err && "code" in err ? err.code : 0;
           resolve(`${stdout}${stderr ? `\n[stderr]\n${stderr}` : ""}\n[exit ${code ?? 0}]`);
         });
@@ -75,7 +78,7 @@ function machineBackend(id: string, api: Api): Backend {
 const tools: Anthropic.Beta.BetaTool[] = [
   {
     name: "bash",
-    description: "Run a shell command in the workspace root. Returns stdout, stderr and the exit code.",
+    description: `Run a shell command in the workspace root${isWindows ? " (Windows PowerShell)" : ""}. Returns stdout, stderr and the exit code.`,
     input_schema: {
       type: "object",
       properties: { command: { type: "string" } },
@@ -155,6 +158,7 @@ export async function codeCommand(argv: string[], deps: { api: Api }) {
   const system = [
     "You are a coding agent working in a terminal through tools.",
     `Workspace: ${backend.label}. All paths are relative to it.`,
+    machine ? "Shell commands run on a Linux machine (bash)." : `Shell commands run on this computer: ${isWindows ? "Windows, in PowerShell" : "bash"}.`,
     "Read before you edit. Prefer edit_file for small changes and write_file for new files.",
     "Run the project's tests or build after changes when there is one, and report what you ran and what happened.",
     "Keep replies short: what you did, what changed, anything that failed.",

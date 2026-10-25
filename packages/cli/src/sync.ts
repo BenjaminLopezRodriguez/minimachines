@@ -11,8 +11,8 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
-import { hostname } from "node:os";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import { hostname, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
 import YProvider from "y-partyserver/provider";
@@ -508,6 +508,15 @@ function demo() {
   eq(t.toString(), "hello brave world", "applyText inserts");
   applyText(t, "hello world!");
   eq(t.toString(), "hello world!", "applyText replaces");
+  // Folder scan: posix keys on every OS (Windows paths use backslashes on disk).
+  const tmp = mkdtempSync(join(tmpdir(), "mm-sync-"));
+  mkdirSync(join(tmp, "sub", "deep"), { recursive: true });
+  writeFileSync(join(tmp, "a.txt"), "a");
+  writeFileSync(join(tmp, "sub", "deep", "b.txt"), "b");
+  mkdirSync(join(tmp, "node_modules", "x"), { recursive: true });
+  writeFileSync(join(tmp, "node_modules", "x", "c.js"), "c");
+  eq(JSON.stringify(listFiles(tmp).sort()), JSON.stringify(["a.txt", "sub/deep/b.txt"]), "listFiles gives posix keys and skips node_modules");
+  eq(toKey(["sub", "deep", "b.txt"].join(sep)), "sub/deep/b.txt", "toKey turns the OS separator into /");
   console.log("sync demo ok");
 }
 

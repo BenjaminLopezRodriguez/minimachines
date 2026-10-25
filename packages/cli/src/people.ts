@@ -4,6 +4,8 @@ import { platform } from "node:os";
 import { basename } from "node:path";
 import { createInterface } from "node:readline";
 
+import { copyToClipboard } from "./proc.js";
+
 type Api = (method: string, path: string, body?: unknown) => Promise<Response>;
 
 type Project = { id: string; name: string; repoKey: string | null };
@@ -130,12 +132,7 @@ async function handoffSms(phone: string, message: string, openUrl: (u: string) =
     return;
   }
   console.log(`  → send this to ${phone} yourself:\n\n${message}\n`);
-  try {
-    execFileSync("pbcopy", { input: message });
-    console.log("  (copied to clipboard)");
-  } catch {
-    // no clipboard tool — the printed message is enough
-  }
+  if (copyToClipboard(message)) console.log("  (copied to clipboard)");
 }
 
 export async function peopleCommand(
