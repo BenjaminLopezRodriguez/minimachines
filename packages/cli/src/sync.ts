@@ -219,7 +219,9 @@ export async function runSync(opts: { api: Api; projectId: string; dir: string; 
   }
   log(`synced ${files.size} files (${pushed} up, ${pulled} down)${readOnly ? " · view-only" : ""}`);
 
-  // Room → disk: everything not done by this folder.
+  // Room → disk: everything not done by this folder. Batched per file so a
+  // teammate typing becomes one write (and one dev-server reload), not dozens.
+  const pendingWrites = new Map<string, NodeJS.Timeout>();
   files.observeDeep((events, txn) => {
     if (txn.origin === LOCAL) return;
     const keys = new Set<string>();
@@ -228,9 +230,12 @@ export async function runSync(opts: { api: Api; projectId: string; dir: string; 
       else keys.add(String(e.path[0]));
     }
     for (const k of keys) {
-      if (ignoredPath(k)) continue;
-      writeLocal(k);
-      log(`↓ ${k}`);
+      if (ignoredPath(k) || pendingWrites.has(k)) continue;
+      pendingWrites.set(k, setTimeout(() => {
+        pendingWrites.delete(k);
+        writeLocal(k);
+        log(`↓ ${k}`);
+      }, 120));
     }
   });
 
@@ -269,6 +274,7 @@ export async function runSync(opts: { api: Api; projectId: string; dir: string; 
   });
   watcher.close();
   for (const t of timers.values()) clearTimeout(t);
+  for (const [k, t] of pendingWrites) (clearTimeout(t), writeLocal(k)); // flush, don't drop
   provider.destroy();
   doc.destroy();
 }

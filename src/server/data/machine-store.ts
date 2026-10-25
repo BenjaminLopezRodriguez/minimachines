@@ -120,6 +120,17 @@ export async function listMachines(filter?: MachineAccess): Promise<Machine[]> {
   return rows.map(toMachine);
 }
 
+/** Newest machine linked to a project — what the workspace previews. Caller checks membership. */
+export async function projectMachine(projectId: string): Promise<Machine | null> {
+  const [row] = await db
+    .select()
+    .from(machinesTable)
+    .where(eq(machinesTable.projectId, projectId))
+    .orderBy(desc(machinesTable.createdAt))
+    .limit(1);
+  return row ? toMachine(row) : null;
+}
+
 export async function getMachine(
   id: string,
   filter?: MachineAccess,

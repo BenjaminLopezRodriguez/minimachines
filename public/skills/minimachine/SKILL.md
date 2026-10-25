@@ -163,6 +163,8 @@ exposed; port 3000 is the one surfaced as `appUrl`.
 | `mm people + <row\|email\|+phone\|agent:<id>> [--view] --yes` | Invite — only after a human says yes (see below) |
 | `mm code [--machine <id>] [-p "<task>"]` | Interactive coding agent (needs `ANTHROPIC_API_KEY`) |
 | `mm view [<url>\|<port>\|<machineId>]` | Open a dev app in a desktop window on the user's computer (reuses one window) |
+| `mm up [dir]` | Share a folder as a live project; prints a link invitees open in a browser (no install) |
+| `mm sync [dir]` / `mm join <link> [dir]` | Keep a folder in live sync with a project / pull one you were invited to |
 
 Reach for raw HTTP only for what the CLI doesn't cover (list machines,
 templates/recommend). Same host, Bearer `mm_…`, owner-scoped.

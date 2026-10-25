@@ -44,7 +44,7 @@ async function joinAction(formData: FormData) {
   const { user } = await withAuth();
   if (!user?.id) redirect(`/join/${token}`);
   const result = await acceptInvite({ token, userId: user.id, code });
-  if (result.ok) redirect("/dashboard");
+  if (result.ok) redirect(`/p/${result.projectId}`); // straight into the live workspace
   redirect(`/join/${token}?${code ? "sent=1&" : ""}error=${result.reason}`);
 }
 
