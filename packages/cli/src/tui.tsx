@@ -38,7 +38,7 @@ const BAD = "red";
 
 type Machine = { id: string; name: string; title: string; status: string; region: string; cpu: number; memoryGb: number; templateId?: string; task?: string; appUrl?: string; emulatorUrl?: string };
 type Share = { slug: string; url: string; label: string; access: string; enabled: boolean; port: number | null; machineId: string | null };
-type Person = { kind: "member" | "pending" | "git"; id: string; name: string; contact: string; role?: string; commits?: number };
+type Person = { kind: "member" | "pending" | "team" | "git"; id: string; name: string; contact: string; role?: string; commits?: number; team?: string };
 /** Status is always a word plus a symbol, never color alone. */
 type Badge = { text: string; color: string };
 type Item = { key: string; title: string; badge?: Badge; fields: [string, string][]; raw: Machine | Share | Person };
@@ -62,7 +62,7 @@ export type Mode =
   | { kind: "help" }
   | { kind: "filter" }
   | { kind: "prompt"; purpose: "exec" | "create" | "invite"; label: string; value: string }
-  | { kind: "confirm"; purpose: "stop" | "revoke-share" | "remove-person" | "invite"; label: string; payload: string };
+  | { kind: "confirm"; purpose: "stop" | "revoke-share" | "remove-person" | "invite" | "add-teammate"; label: string; payload: string };
 
 export type State = { view: "home" | "dash" | "bot" | "board"; input: string; pick: number; tab: Tab; index: number; filter: string; mode: Mode };
 export type Key = { input: string; upArrow?: boolean; downArrow?: boolean; leftArrow?: boolean; rightArrow?: boolean; tab?: boolean; return?: boolean; escape?: boolean; backspace?: boolean; delete?: boolean; ctrl?: boolean; meta?: boolean };
@@ -195,7 +195,15 @@ export async function load(api: Api, tab: Tab): Promise<{ items: Item[]; project
     for (const m of p.members) people.push({ kind: "member", id: m.principal, name: m.name, contact: m.email ?? "", role: m.role });
     for (const x of p.pending) people.push({ kind: "pending", id: x.id, name: x.contact, contact: x.contact, role: x.role });
   }
-  const known = new Set(people.map((x) => x.contact.toLowerCase()));
+  const known = new Set(people.flatMap((x) => [x.contact.toLowerCase(), x.id]));
+  // Teammates with accounts (from the website) before git authors; + adds them directly.
+  const teamRes = await api("GET", "/api/v1/orgs").catch(() => null);
+  const { teammates = [] } = teamRes?.ok ? ((await teamRes.json()) as { teammates?: { userId: string; name: string; email: string | null; team: string }[] }) : {};
+  for (const t of teammates) {
+    if (known.has(t.userId) || (t.email && known.has(t.email.toLowerCase()))) continue;
+    people.push({ kind: "team", id: t.userId, name: t.name, contact: t.email ?? "", team: t.team });
+    if (t.email) known.add(t.email.toLowerCase());
+  }
   for (const a of gitAuthors()) if (!known.has(a.email)) people.push({ kind: "git", id: a.email, name: a.name, contact: a.usable ? a.email : "", commits: a.commits });
   return {
     projectId: project?.id || undefined,
@@ -203,8 +211,16 @@ export async function load(api: Api, tab: Tab): Promise<{ items: Item[]; project
     items: people.map((x) => ({
       key: `${x.kind}:${x.id}`,
       title: x.name,
-      badge: x.kind === "member" ? { text: `■ ${x.role}`, color: OK } : x.kind === "pending" ? { text: "◇ invited", color: WARN } : { text: `· ${x.commits} commits`, color: "gray" },
-      fields: [["contact", x.contact || (x.kind === "git" ? "github noreply — type an email" : "—")], ["role", x.role ?? "—"], ["source", x.kind === "git" ? "git log (12 mo)" : "project"]],
+      badge:
+        x.kind === "member" ? { text: `■ ${x.role}`, color: OK }
+        : x.kind === "pending" ? { text: "◇ invited", color: WARN }
+        : x.kind === "team" ? { text: "◆ teammate", color: BRAND }
+        : { text: `· ${x.commits} commits`, color: "gray" },
+      fields: [
+        ["contact", x.contact || (x.kind === "git" ? "github noreply — type an email" : "—")],
+        ["role", x.role ?? (x.kind === "team" ? "+ adds them directly" : "—")],
+        ["source", x.kind === "git" ? "git log (12 mo)" : x.kind === "team" ? `team: ${x.team}` : "project"],
+      ],
       raw: x,
     })),
   };
@@ -375,8 +391,9 @@ function App({ deps, exit, startView }: { deps: TuiDeps; exit: (after?: () => Pr
       }
       if (state.tab === "shares" && purpose === "d" && share) return ask({ kind: "confirm", purpose: "revoke-share", label: `revoke ${share.url}?`, payload: share.slug });
       if (state.tab === "people") {
+        if (purpose === "+" && person?.kind === "team") return ask({ kind: "confirm", purpose: "add-teammate", label: `add ${person.name} to this project? (they get an email)`, payload: person.id });
         if (purpose === "+") return ask({ kind: "prompt", purpose: "invite", label: "invite", value: person?.kind === "git" ? person.contact : "" });
-        if (purpose === "-" && person && person.kind !== "git" && person.role !== "owner")
+        if (purpose === "-" && person && (person.kind === "member" || person.kind === "pending") && person.role !== "owner")
           return ask({ kind: "confirm", purpose: "remove-person", label: `${person.kind === "pending" ? "revoke invite for" : "remove"} ${person.name}?`, payload: `${person.kind}|${person.id}` });
       }
       return setStatus(`${purpose} does nothing here — ? for keys`);
@@ -404,6 +421,13 @@ function App({ deps, exit, startView }: { deps: TuiDeps; exit: (after?: () => Pr
         const { invites } = (await (await deps.api("POST", `/api/v1/projects/${projectId}/invites`, { contacts: [c], role: view === "view" ? "viewer" : "member" })).json()) as { invites: { status: string; error?: string }[] };
         const r = invites[0];
         return r?.status === "sent" ? `invite sent to ${contact}` : r?.status === "handoff" ? `not sent by the server — run mm people + ${contact}` : `invite failed: ${r?.error ?? r?.status}`;
+      });
+      if (purpose === "add-teammate") return run("add", async () => {
+        const projectId = data.projectId ?? (await createProject(deps.api));
+        const res = await deps.api("POST", `/api/v1/projects/${projectId}/members`, { userIds: [arg] });
+        const body = (await res.json()) as { members?: { status: string; error?: string }[]; error?: { message: string } };
+        const m = body.members?.[0];
+        return m?.status === "added" ? "added — they'll get an email with the link" : m?.status === "already" ? "already in this project" : `add failed: ${m?.error ?? body.error?.message ?? res.status}`;
       });
       if (purpose === "remove-person" && data.projectId) return run("remove", async () => {
         const [k, id = ""] = arg.split("|");

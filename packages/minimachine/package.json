@@ -12,7 +12,7 @@
     }
   },
   "bin": {
-    "minimachine-mcp": "./dist/mcp.js"
+    "minimachine-mcp": "dist/mcp.js"
   },
   "files": [
     "dist",

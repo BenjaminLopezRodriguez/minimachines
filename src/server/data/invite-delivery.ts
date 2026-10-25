@@ -3,6 +3,7 @@ import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import { env } from "~/env";
 
 import { sendEmail } from "./notify-email";
+import type { OrgRow } from "./orgs";
 import type { InviteRow, ProjectRow } from "./projects";
 import { sendSms, smsEnabled } from "./sms";
 
@@ -23,16 +24,26 @@ export async function displayName(userId: string): Promise<{ name: string; email
   }
 }
 
+/** What the invite is to: a project, or a team. */
+export type InviteTarget = { kind: "project"; project: ProjectRow } | { kind: "team"; org: OrgRow };
+
+export function targetName(t: InviteTarget): string {
+  return t.kind === "project" ? t.project.name : `the ${t.org.name} team`;
+}
+
 export function inviteText(input: {
   inviter: string;
-  project: ProjectRow;
+  target: InviteTarget;
   invite: InviteRow;
   url: string;
 }): string {
-  const where = input.project.repoKey ? ` (${input.project.repoKey})` : "";
-  const access = input.invite.role === "viewer" ? "view" : "work on";
+  const t = input.target;
+  const what =
+    t.kind === "team"
+      ? `join ${targetName(t)}`
+      : `${input.invite.role === "viewer" ? "view" : "work on"} ${t.project.name}${t.project.repoKey ? ` (${t.project.repoKey})` : ""}`;
   return [
-    `${input.inviter} invited you to ${access} ${input.project.name}${where} on minimachines.`,
+    `${input.inviter} invited you to ${what} on minimachines.`,
     input.invite.note ? `\n"${input.invite.note}"` : "",
     `\nJoin: ${input.url}`,
     `This link works once and expires ${input.invite.expiresAt.toDateString()}.`,
@@ -50,7 +61,7 @@ export type Delivery = { status: "sent" } | { status: "handoff"; message: string
  */
 export async function deliverInvite(input: {
   inviter: string;
-  project: ProjectRow;
+  target: InviteTarget;
   invite: InviteRow;
   token: string;
 }): Promise<Delivery> {
@@ -59,7 +70,7 @@ export async function deliverInvite(input: {
     const sent = await sendEmail({
       to: input.invite.contact,
       from: env.INVITE_FROM_EMAIL,
-      subject: `${input.inviter} invited you to ${input.project.name}`,
+      subject: `${input.inviter} invited you to ${targetName(input.target)}`,
       text: message,
     });
     return sent ? { status: "sent" } : { status: "handoff", message };
@@ -69,6 +80,18 @@ export async function deliverInvite(input: {
     return { status: "sent" };
   }
   return { status: "handoff", message };
+}
+
+/** Tell a teammate they were added to a project directly. Best-effort. */
+export async function notifyAdded(input: { inviter: string; project: ProjectRow; userId: string }): Promise<boolean> {
+  const { email } = await displayName(input.userId);
+  if (!email) return false;
+  return sendEmail({
+    to: email,
+    from: env.INVITE_FROM_EMAIL,
+    subject: `${input.inviter} added you to ${input.project.name}`,
+    text: `${input.inviter} added you to ${input.project.name} on minimachines.\n\nOpen it: ${BASE}/p/${input.project.id}`,
+  }).catch(() => false);
 }
 
 export async function deliverCode(invite: InviteRow, code: string): Promise<boolean> {

@@ -163,7 +163,7 @@ exposed; port 3000 is the one surfaced as `appUrl`.
 | `mm pager set --email …` / `mm pager status` | Reach-ability |
 | `mm run <id>` | Open the browser console (for a human who's present) |
 | `mm skill install [--agent claude\|codex\|cursor] [--dir <p>] [--print]` | Install this skill for another agent |
-| `mm people --json` | Members, pending invites and git authors of this repo's project |
+| `mm people --json` | Members, pending invites, teammates and git authors of this repo's project |
 | `mm people + <row\|email\|+phone\|agent:<id>> [--view] --yes` | Invite — only after a human says yes (see below) |
 | `mm code [--machine <id>] [-p "<task>"]` | Interactive coding agent (needs `ANTHROPIC_API_KEY`) |
 | `mm view [<url>\|<port>\|<machineId>]` | Open a dev app in a desktop window on the user's computer (reuses one window) |
@@ -240,8 +240,11 @@ share live (the Board tab at `…/p/<project>`).
 
 Looking is free; messaging a person needs a human yes.
 
-1. `mm people --json` — members, pending invites, and everyone who committed to
-   this repo in the last 12 months (read locally from `git log`).
+1. `mm people --json` — members, pending invites, `teammates` (people on the
+   user's minimachines team, who already have accounts), and everyone who
+   committed to this repo in the last 12 months (read locally from `git log`).
+   Teammate rows come first; `+ <row>` adds a teammate directly (they get an
+   email with the link, no join code) — still needs the human yes.
 2. Suggest who to invite and why ("Ana wrote most of `src/server/git`").
 3. Get a yes: in chat when the user is present, otherwise
    `mm ask <id> "Invite ana@acme.dev to <project>?"`.

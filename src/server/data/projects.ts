@@ -3,7 +3,9 @@ import { createHash, randomBytes, randomInt } from "node:crypto";
 import { and, count, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 
 import { db } from "~/server/db";
-import { projectInvites, projectMembers, projects } from "~/server/db/schema";
+import { organizationMembers, organizations, projectInvites, projectMembers, projects } from "~/server/db/schema";
+
+import { getOrgRole, type OrgRow, requireOrgAdmin, sharesOrg } from "./orgs";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -12,6 +14,7 @@ const MAX_CODES_PER_INVITE = 5;
 const CODE_COOLDOWN_MS = 60 * 1000;
 const MAX_INVITES_PER_DAY = 20;
 const MAX_PENDING_PER_PROJECT = 50;
+const MAX_PENDING_PER_ORG = 200;
 
 export type Role = "owner" | "member" | "viewer";
 export type Channel = "email" | "sms";
@@ -150,13 +153,24 @@ export async function listPeople(projectId: string, userId: string) {
  * fresh one and the old link stops working.
  */
 export async function createInvites(input: {
-  projectId: string;
   invitedBy: string;
-  role: "member" | "viewer";
   note?: string;
   contacts: { channel: Channel; contact: string; codeRequired: boolean }[];
-}): Promise<{ invite: InviteRow; token: string }[]> {
-  await requireOwner(input.projectId, input.invitedBy);
+} & (
+  | { projectId: string; orgId?: undefined; role: "member" | "viewer" }
+  | { orgId: string; projectId?: undefined; role: "member" | "admin" }
+)): Promise<{ invite: InviteRow; token: string }[]> {
+  // Project invites: owner only. Team invites: owner/admin, and only the owner mints admins.
+  let target;
+  if (input.orgId !== undefined) {
+    const mine = await requireOrgAdmin(input.orgId, input.invitedBy);
+    if (input.role === "admin" && mine !== "owner") throw new Error("Only the team owner can invite admins");
+    target = eq(projectInvites.orgId, input.orgId);
+  } else {
+    await requireOwner(input.projectId, input.invitedBy);
+    target = eq(projectInvites.projectId, input.projectId);
+  }
+  const maxPending = input.orgId ? MAX_PENDING_PER_ORG : MAX_PENDING_PER_PROJECT;
 
   const now = Date.now();
   const [sentToday] = await db
@@ -172,18 +186,15 @@ export async function createInvites(input: {
     throw new Error(`Invite limit reached (${MAX_INVITES_PER_DAY} per day)`);
   }
 
-  const existing = await db
-    .select()
-    .from(projectInvites)
-    .where(eq(projectInvites.projectId, input.projectId));
+  const existing = await db.select().from(projectInvites).where(target);
   const live = existing.filter(isLive);
   const contacts = input.contacts.map((c) => ({
     ...c,
     contact: c.channel === "email" ? c.contact.trim().toLowerCase() : c.contact.trim(),
   }));
   const replaced = live.filter((i) => contacts.some((c) => c.contact === i.contact));
-  if (live.length - replaced.length + contacts.length > MAX_PENDING_PER_PROJECT) {
-    throw new Error(`Too many pending invites (${MAX_PENDING_PER_PROJECT} max)`);
+  if (live.length - replaced.length + contacts.length > maxPending) {
+    throw new Error(`Too many pending invites (${maxPending} max)`);
   }
   if (replaced.length) {
     await db
@@ -198,7 +209,8 @@ export async function createInvites(input: {
     const [invite] = await db
       .insert(projectInvites)
       .values({
-        projectId: input.projectId,
+        projectId: input.projectId ?? null,
+        orgId: input.orgId ?? null,
         tokenHash: hash(token),
         role: input.role,
         channel: c.channel,
@@ -216,16 +228,22 @@ export async function createInvites(input: {
 }
 
 /** For rendering the join page; does not consume anything. */
-export async function resolveInvite(
-  token: string,
-): Promise<{ invite: InviteRow; project: ProjectRow } | null> {
+export type ResolvedInvite =
+  | { invite: InviteRow; project: ProjectRow; org: null }
+  | { invite: InviteRow; project: null; org: OrgRow };
+
+export async function resolveInvite(token: string): Promise<ResolvedInvite | null> {
   const [row] = await db
-    .select({ invite: projectInvites, project: projects })
+    .select({ invite: projectInvites, project: projects, org: organizations })
     .from(projectInvites)
-    .innerJoin(projects, eq(projects.id, projectInvites.projectId))
+    .leftJoin(projects, eq(projects.id, projectInvites.projectId))
+    .leftJoin(organizations, eq(organizations.id, projectInvites.orgId))
     .where(eq(projectInvites.tokenHash, hash(token)))
     .limit(1);
-  return row && isLive(row.invite) ? row : null;
+  if (!row || !isLive(row.invite)) return null;
+  if (row.project) return { invite: row.invite, project: row.project, org: null };
+  if (row.org) return { invite: row.invite, project: null, org: row.org };
+  return null; // target was deleted
 }
 
 /**
@@ -266,6 +284,7 @@ export async function issueJoinCode(
 
 export type AcceptResult =
   | { ok: true; projectId: string; role: Role }
+  | { ok: true; orgId: string; role: string }
   | { ok: false; reason: "invalid" | "code_required" | "bad_code" | "too_many_tries" };
 
 /**
@@ -279,7 +298,7 @@ export async function acceptInvite(input: {
 }): Promise<AcceptResult> {
   const found = await resolveInvite(input.token);
   if (!found) return { ok: false, reason: "invalid" };
-  const { invite } = found;
+  const { invite, org } = found;
 
   if (invite.codeRequired) {
     if (!input.code || !invite.codeHash) return { ok: false, reason: "code_required" };
@@ -309,14 +328,32 @@ export async function acceptInvite(input: {
     .returning({ id: projectInvites.id });
   if (!won) return { ok: false, reason: "invalid" };
 
+  if (org) {
+    // Joining never downgrades: an existing admin/owner keeps their role.
+    const current = await getOrgRole(org.id, input.userId);
+    if (!current) {
+      await db
+        .insert(organizationMembers)
+        .values({ orgId: org.id, userId: input.userId, role: invite.role, invitedBy: invite.invitedBy })
+        .onConflictDoNothing();
+    } else if (current === "member" && invite.role === "admin") {
+      await db
+        .update(organizationMembers)
+        .set({ role: "admin" })
+        .where(and(eq(organizationMembers.orgId, org.id), eq(organizationMembers.userId, input.userId)));
+    }
+    return { ok: true, orgId: org.id, role: current && current !== "member" ? current : invite.role };
+  }
+  const projectId = found.project.id;
+
   // Joining never downgrades someone who is already in the project.
-  const current = await getRole(invite.projectId, input.userId);
+  const current = await getRole(projectId, input.userId);
   const role = invite.role as Role;
   if (!current) {
     await db
       .insert(projectMembers)
       .values({
-        projectId: invite.projectId,
+        projectId,
         principal: input.userId,
         role,
         invitedBy: invite.invitedBy,
@@ -328,12 +365,12 @@ export async function acceptInvite(input: {
       .set({ role })
       .where(
         and(
-          eq(projectMembers.projectId, invite.projectId),
+          eq(projectMembers.projectId, projectId),
           eq(projectMembers.principal, input.userId),
         ),
       );
   }
-  return { ok: true, projectId: invite.projectId, role: current === "owner" ? "owner" : role };
+  return { ok: true, projectId, role: current === "owner" ? "owner" : role };
 }
 
 export async function revokeInvite(input: {
@@ -392,4 +429,33 @@ export async function removeMember(input: {
     )
     .returning({ principal: projectMembers.principal });
   return rows.length > 0;
+}
+
+/**
+ * Add someone who already has an account straight to a project — no invite
+ * link or code. Only to people the owner shares a team with, so this can't be
+ * used to drop strangers into projects.
+ */
+export async function addTeammate(input: {
+  projectId: string;
+  userId: string;
+  target: string;
+  role: "member" | "viewer";
+}): Promise<"added" | "already"> {
+  await requireOwner(input.projectId, input.userId);
+  if (!(await sharesOrg(input.userId, input.target))) throw new Error("You can only add people from your team");
+  const current = await getRole(input.projectId, input.target);
+  if (current === "owner" || current === "member" || current === input.role) return "already";
+  if (current) {
+    await db
+      .update(projectMembers)
+      .set({ role: input.role })
+      .where(and(eq(projectMembers.projectId, input.projectId), eq(projectMembers.principal, input.target)));
+    return "added";
+  }
+  await db
+    .insert(projectMembers)
+    .values({ projectId: input.projectId, principal: input.target, role: input.role, invitedBy: input.userId })
+    .onConflictDoNothing();
+  return "added";
 }
