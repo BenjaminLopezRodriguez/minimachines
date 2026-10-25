@@ -58,6 +58,27 @@ export async function upsertProject(input: {
   return row;
 }
 
+/** Projects the user belongs to, with their role in each. */
+export async function listProjects(userId: string) {
+  return db
+    .select({
+      id: projects.id,
+      name: projects.name,
+      repoKey: projects.repoKey,
+      ownerUserId: projects.ownerUserId,
+      role: projectMembers.role,
+    })
+    .from(projectMembers)
+    .innerJoin(projects, eq(projects.id, projectMembers.projectId))
+    .where(eq(projectMembers.principal, userId))
+    .orderBy(desc(projects.createdAt));
+}
+
+export async function getProject(projectId: string): Promise<ProjectRow | null> {
+  const [row] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+  return row ?? null;
+}
+
 export async function getRole(
   projectId: string,
   principal: string,

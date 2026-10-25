@@ -121,7 +121,7 @@ export async function revokeAgentKey(
 
 export async function verifyApiKey(
   secret: string,
-): Promise<{ userId: string; keyId: string } | null> {
+): Promise<{ userId: string; keyId: string; agent: boolean } | null> {
   if (!secret.startsWith("mm_")) return null;
 
   // Single statement: match live key by hash and stamp last-used atomically.
@@ -131,7 +131,29 @@ export async function verifyApiKey(
     .where(
       and(eq(apiKeys.keyHash, hashSecret(secret)), isNull(apiKeys.revokedAt)),
     )
-    .returning({ id: apiKeys.id, userId: apiKeys.userId });
+    .returning({ id: apiKeys.id, userId: apiKeys.userId, label: apiKeys.label });
 
-  return row ? { userId: row.userId, keyId: row.id } : null;
+  // Machine-scoped agent keys are labeled `agent:<machineId>` at mint time.
+  return row
+    ? { userId: row.userId, keyId: row.id, agent: row.label.startsWith("agent:") }
+    : null;
+}
+
+/** The live agent key of a machine, for granting it viewer access elsewhere. */
+export async function agentKeyIdFor(
+  userId: string,
+  machineId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ id: apiKeys.id })
+    .from(apiKeys)
+    .where(
+      and(
+        eq(apiKeys.userId, userId),
+        eq(apiKeys.label, `agent:${machineId}`),
+        isNull(apiKeys.revokedAt),
+      ),
+    )
+    .limit(1);
+  return row?.id ?? null;
 }

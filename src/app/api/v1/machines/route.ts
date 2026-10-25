@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isApiAuth, requireApiKey } from "~/server/api/v1/auth";
 import { jsonError, jsonOk } from "~/server/api/v1/respond";
 import { createMachine, listMachines } from "~/server/data/machine-store";
+import { getRole } from "~/server/data/projects";
 import { loadTemplates } from "~/server/data/templates";
 
 export async function GET(request: Request) {
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
       templateId: z.string().min(1),
       name: z.string().min(1).max(64).optional(),
       task: z.string().min(1).max(200).optional(),
+      projectId: z.string().uuid().optional(),
     })
     .safeParse(body);
   if (!parsed.success) {
@@ -41,6 +43,14 @@ export async function POST(request: Request) {
       `Invalid create payload: "${field}" is required. templateId must be one of: ${known}`,
       400,
     );
+  }
+
+  const { projectId } = parsed.data;
+  if (projectId) {
+    const role = await getRole(projectId, auth.userId);
+    if (role !== "owner" && role !== "member") {
+      return jsonError("project_not_found", "Project not found", 404);
+    }
   }
 
   try {

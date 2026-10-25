@@ -11,6 +11,9 @@ import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
+import { codeCommand } from "./code.js";
+import { peopleCommand, repoKeyFromRemote } from "./people.js";
+
 type Machine = {
   id: string;
   name: string;
@@ -67,6 +70,10 @@ function usage(exitCode = 1): never {
   minimachines share create --machine <id> --port <n> [--api|--web] [--public|--gated] [--secret <s>]
   minimachines share --local <port> [--api|--web] [--public|--gated] [--secret <s>]
   minimachines share ls | rm <slug>
+  minimachines people [--json] [--project <name>]          people on this repo's project
+  minimachines people + <row|email|+phone|agent:<id>>... [--view] [--note <text>] [--yes]
+  minimachines people - <row|email|+phone>...              revoke an invite / remove a member
+  minimachines code [--machine <id>] [-p <prompt>] [--yes]  coding agent (needs ANTHROPIC_API_KEY)
   mm run <machineId>
 
 Run flags (macOS):
@@ -501,8 +508,8 @@ function skillInstall(opts: { agent?: string; dir?: string; print?: boolean }) {
 
 // --- machine commands -------------------------------------------------------
 
-/** Every machine call goes through here: one auth/error path, no duplication. */
-async function api(method: string, path: string, body?: unknown) {
+/** Every API call goes through here: one auth path. Throws on a non-2xx. */
+async function apiOrThrow(method: string, path: string, body?: unknown) {
   const res = await fetch(`${baseUrl()}${path}`, {
     method,
     headers: {
@@ -518,18 +525,44 @@ async function api(method: string, path: string, body?: unknown) {
           ? (body as unknown as BodyInit) // raw bytes: file upload
           : JSON.stringify(body),
   });
-  if (!res.ok) {
-    console.error(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return res;
+}
+
+/** CLI commands: print the API's error and exit non-zero. */
+async function api(method: string, path: string, body?: unknown) {
+  try {
+    return await apiOrThrow(method, path, body);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : err);
     process.exit(1);
   }
-  return res;
+}
+
+/** This repo's project, if one exists already (never creates one). */
+async function currentProjectId(): Promise<string | undefined> {
+  let remote: string;
+  try {
+    remote = execFileSync("git", ["remote", "get-url", "origin"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return undefined;
+  }
+  const key = repoKeyFromRemote(remote);
+  if (!key) return undefined;
+  const res = await apiOrThrow("GET", "/api/v1/projects").catch(() => null);
+  if (!res) return undefined;
+  const { projects } = (await res.json()) as { projects: { id: string; repoKey: string | null; role: string }[] };
+  return projects.find((p) => p.repoKey === key && p.role !== "viewer")?.id;
 }
 
 const mpath = (id: string, tail = "") =>
   `/api/v1/machines/${encodeURIComponent(id)}${tail}`;
 
 async function machineCreate(templateId: string, json: boolean) {
-  const res = await api("POST", "/api/v1/machines", { templateId });
+  const res = await api("POST", "/api/v1/machines", { templateId, projectId: await currentProjectId() });
   const { machine } = (await res.json()) as { machine: Machine & { appUrl?: string } };
   if (json) {
     console.log(JSON.stringify(machine, null, 2));
@@ -798,6 +831,15 @@ async function main() {
     return out;
   })();
 
+  if (cmd === "people") {
+    await peopleCommand(args.slice(1), { api, openUrl });
+    return;
+  }
+  if (cmd === "code") {
+    // The agent loop keeps running after a failed call, so it gets the throwing variant.
+    await codeCommand(args.slice(1), { api: apiOrThrow });
+    return;
+  }
   if (cmd === "skill") {
     if (args[1] && args[1] !== "install" && !args[1].startsWith("--")) {
       console.error("Usage: mm skill install [--agent claude|codex|cursor] [--dir <path>] [--print]");
@@ -938,7 +980,7 @@ async function main() {
   // user on an older CLI learns to upgrade instead of re-reading usage.
   const known = [
     "run", "agent", "login", "logout", "whoami", "pager", "share",
-    "create", "exec", "put", "ask", "say", "stop", "skill",
+    "create", "exec", "put", "ask", "say", "stop", "skill", "people", "code",
   ];
   if (cmd && !known.includes(cmd)) {
     console.error(

@@ -152,6 +152,9 @@ exposed; port 3000 is the one surfaced as `appUrl`.
 | `mm pager set --email …` / `mm pager status` | Reach-ability |
 | `mm run <id>` | Open the browser console (for a human who's present) |
 | `mm skill install [--agent claude\|codex\|cursor] [--dir <p>] [--print]` | Install this skill for another agent |
+| `mm people --json` | Members, pending invites and git authors of this repo's project |
+| `mm people + <row\|email\|+phone\|agent:<id>> [--view] --yes` | Invite — only after a human says yes (see below) |
+| `mm code [--machine <id>] [-p "<task>"]` | Interactive coding agent (needs `ANTHROPIC_API_KEY`) |
 
 Reach for raw HTTP only for what the CLI doesn't cover (list machines,
 templates/recommend). Same host, Bearer `mm_…`, owner-scoped.
@@ -169,6 +172,10 @@ templates/recommend). Same host, Bearer `mm_…`, owner-scoped.
 | `GET/PUT /api/v1/pager/contact` | Read/set the user's pager email |
 | `POST /api/v1/shares` / `GET` / `DELETE /<slug>` | Create/list/revoke share links |
 | `GET /api/v1/templates`, `POST /api/v1/templates/recommend` | Pick a template |
+| `GET /api/v1/projects` / `PUT {name,repoKey?}` | List / find-or-create projects |
+| `GET /api/v1/projects/<id>/people` | Members + pending invites |
+| `POST /api/v1/projects/<id>/invites` `{contacts,role?,note?}` | Send invites (user keys only; agent keys get 403) |
+| `DELETE /api/v1/projects/<id>/invites/<inviteId>` | Revoke an invite |
 
 Templates include `node-ts`, `python`, `agent-shell`, `claude-devbox`,
 `fullstack-web`, and more — or let `templates/recommend` choose from the task.
@@ -187,6 +194,26 @@ Templates include `node-ts`, `python`, `agent-shell`, `claude-devbox`,
   ```
 - Share a **local** project too: `mm share --local <port>` (tunnels it and mints
   the same kind of link).
+
+---
+
+## Invite collaborators
+
+Looking is free; messaging a person needs a human yes.
+
+1. `mm people --json` — members, pending invites, and everyone who committed to
+   this repo in the last 12 months (read locally from `git log`).
+2. Suggest who to invite and why ("Ana wrote most of `src/server/git`").
+3. Get a yes: in chat when the user is present, otherwise
+   `mm ask <id> "Invite ana@acme.dev to <project>?"`.
+4. Only then: `mm people + 2 sam@lee.io --yes` (`--view` for read-only,
+   `--note "<why>"` to add a line). `+ agent:<machine>` gives another
+   machine's agent read-only access for debugging.
+5. Never guess or build an email or phone number — only use ones from
+   `git log` or typed by the user.
+
+Machine agent keys cannot send invites (the server returns 403); ask the user
+to run `mm people` on their laptop instead.
 
 ---
 
