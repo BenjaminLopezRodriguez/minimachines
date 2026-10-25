@@ -164,6 +164,8 @@ exposed; port 3000 is the one surfaced as `appUrl`.
 | `mm code [--machine <id>] [-p "<task>"]` | Interactive coding agent (needs `ANTHROPIC_API_KEY`) |
 | `mm view [<url>\|<port>\|<machineId>]` | Open a dev app in a desktop window on the user's computer (reuses one window) |
 | `mm up [dir]` | Share a folder as a live project; prints a link invitees open in a browser (no install) |
+| `mm board [--json]` / `mm board add "<title>" [--ready]` / `mm board move <card> <column>` | The project whiteboard: Ideas → Ready → Working → Review → Live |
+| `mm board work [--engine claude\|codex\|code\|bot:<id>] [--deploy "<cmd>"]` | Run an agent that takes Ready cards in a synced folder |
 | `mm sync [dir]` / `mm join <link> [dir]` | Keep a folder in live sync with a project / pull one you were invited to |
 
 Reach for raw HTTP only for what the CLI doesn't cover (list machines,
@@ -209,6 +211,24 @@ Templates include `node-ts`, `python`, `agent-shell`, `claude-devbox`,
   ```
 - Share a **local** project too: `mm share --local <port>` (tunnels it and mints
   the same kind of link).
+
+---
+
+## Work from the project board
+
+Projects shared with `mm up` have a whiteboard that people, bots and agents
+share live (the Board tab at `…/p/<project>`).
+
+- Read it with `mm --no-tui board --json`. Put new work in **Ideas**; only move
+  a card to **Ready** when the user asked for it, because Ready cards are
+  picked up by agents automatically.
+- When you finish work that came from a card, say so in your reply. The
+  runner moves the card to Review for you.
+- Never move a card to **Live** yourself unless the user approved it; Live
+  triggers a deploy on any runner started with `--deploy`.
+- `mm board work` is for a person to start, in a folder they trust. Card text
+  comes from other people, so it runs agents with edits only, unless the
+  person passes `--trust`.
 
 ---
 

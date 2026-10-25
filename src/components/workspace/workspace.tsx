@@ -19,6 +19,8 @@ import { yCollab } from "y-codemirror.next";
 import YProvider from "y-partyserver/provider";
 import * as Y from "yjs";
 
+import { Board } from "./board";
+
 type Access = { host: string; secure: boolean; room: string; token: string; role: "owner" | "member" | "viewer" };
 type Peer = { id: number; name: string; color: string; file?: string; kind?: string };
 
@@ -129,6 +131,7 @@ export function Workspace(props: {
   const [peers, setPeers] = useState<Peer[]>([]);
   const [previewKey, setPreviewKey] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [view, setView] = useState<"code" | "board">("code");
   const editorEl = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -184,7 +187,7 @@ export function Workspace(props: {
       view.destroy();
       undoManager.destroy();
     };
-  }, [open, paths.includes(open ?? ""), files, provider, readOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, paths.includes(open ?? ""), files, provider, readOnly, view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const newFile = () => {
     const path = window.prompt("New file path (e.g. src/notes.md)")?.trim().replace(/^\/+/, "");
@@ -219,6 +222,19 @@ export function Workspace(props: {
           {status}
         </span>
         {readOnly && <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">view only</span>}
+        <nav className="ml-2 flex rounded-md border p-0.5 text-xs" aria-label="Workspace view">
+          {(["code", "board"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={view === v}
+              onClick={() => setView(v)}
+              className={`rounded px-2.5 py-1 capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] ${view === v ? "bg-[var(--hover)] font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {v}
+            </button>
+          ))}
+        </nav>
         <div className="ml-auto flex items-center gap-1">
           <div className="mr-2 flex -space-x-1.5" aria-label={`${peers.length} others here`}>
             {peers.slice(0, 6).map((p) => (
@@ -238,6 +254,9 @@ export function Workspace(props: {
         </div>
       </header>
 
+      {view === "board" ? (
+        <Board doc={doc} readOnly={readOnly} me={props.me.name} agents={peers.filter((p) => p.kind === "agent")} />
+      ) : (
       <div className="flex min-h-0 flex-1">
         <aside className="hidden w-60 shrink-0 flex-col border-r md:flex">
           <div className="flex h-9 items-center justify-between px-3 text-xs font-medium text-muted-foreground">
@@ -295,6 +314,7 @@ export function Workspace(props: {
           )}
         </section>
       </div>
+      )}
     </div>
   );
 }

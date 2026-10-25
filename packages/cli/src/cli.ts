@@ -81,6 +81,9 @@ function usage(exitCode = 1): never {
   minimachines up [dir]                                    share this folder as a live project; prints a link anyone invited can open
   minimachines sync [dir] [--project <id>]                 keep a folder in step with its live project
   minimachines join <link> [dir] [--here]                  pull a project you were invited to, then keep it in sync
+  minimachines board [dir] [--json] | add "<title>" [--details …] [--ready] | move <card> <column>
+  minimachines board work [dir] [--engine claude|codex|code|bot:<id>] [--trust] [--deploy "<cmd>"] [--auto-deploy] [--once]
+                                                           agents take Ready cards from the project whiteboard
   minimachines view [<url>|<port>|<machineId>]             open a dev app in the desktop viewer (default :3000)
   minimachines tui [--json] [--test]                       dashboard: machines, shares, people (? for keys)
   minimachines code [--machine <id>] [-p <prompt>] [--yes]  coding agent (needs ANTHROPIC_API_KEY)
@@ -926,6 +929,15 @@ async function main() {
     return out;
   })();
 
+  if (cmd === "board") {
+    if (typeof WebSocket === "undefined") {
+      console.error("The board needs Node 22 or newer.");
+      process.exit(1);
+    }
+    const { boardCommand } = await import("./board.js");
+    await boardCommand(args.slice(1), { api: apiOrThrow, baseUrl: baseUrl() });
+    return;
+  }
   if (cmd === "up" || cmd === "sync" || cmd === "join") {
     if (typeof WebSocket === "undefined") {
       console.error("Live sync needs Node 22 or newer.");
@@ -1094,7 +1106,7 @@ async function main() {
   // user on an older CLI learns to upgrade instead of re-reading usage.
   const known = [
     "run", "agent", "login", "logout", "whoami", "pager", "share",
-    "create", "exec", "put", "ask", "say", "stop", "skill", "people", "code", "tui", "view", "up", "sync", "join",
+    "create", "exec", "put", "ask", "say", "stop", "skill", "people", "code", "tui", "view", "up", "sync", "join", "board",
   ];
   if (cmd && !known.includes(cmd)) {
     console.error(

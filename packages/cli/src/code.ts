@@ -144,6 +144,8 @@ export async function codeCommand(argv: string[], deps: { api: Api }) {
   // From the TUI home screen: run this first, then stay in the REPL.
   const initial = flag("--initial");
   let autoApprove = argv.includes("--yes");
+  // Board runner mode: file writes/edits go through, shell commands are declined unless --yes.
+  const allowWrites = argv.includes("--allow-writes");
   const backend = machine ? machineBackend(machine, deps.api) : localBackend(process.cwd());
 
   // Credentials resolve from ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN / an `ant auth login` profile.
@@ -163,6 +165,7 @@ export async function codeCommand(argv: string[], deps: { api: Api }) {
 
   async function approve(summary: string): Promise<boolean> {
     if (autoApprove) return true;
+    if (allowWrites && /^(write|edit) /.test(summary)) return true;
     if (!process.stdin.isTTY) return false;
     const a = (await rl.question(`${bold("allow")} ${summary}? [y/N/a=always] `)).trim().toLowerCase();
     if (a === "a") autoApprove = true;

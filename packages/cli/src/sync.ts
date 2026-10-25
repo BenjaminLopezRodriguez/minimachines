@@ -117,7 +117,7 @@ export function rebase(base: string, local: string, current: string): string {
 }
 
 /** Connect to a project's room; resolves once the first sync with the server is done. */
-async function connect(api: Api, projectId: string, doc: Y.Doc): Promise<{ provider: YProvider; access: Access }> {
+export async function connect(api: Api, projectId: string, doc: Y.Doc): Promise<{ provider: YProvider; access: Access }> {
   const fresh = async () => (await (await api("POST", `/api/v1/projects/${projectId}/sync`)).json()) as Access;
   const access = await fresh();
   const provider = new YProvider(access.host, access.room, doc, {
@@ -295,17 +295,20 @@ export async function upCommand(argv: string[], deps: { api: Api; baseUrl: strin
   await runSync({ api: deps.api, projectId: project.id, dir, seed: "local" });
 }
 
+/** The project for a folder: --project, else its git origin, else a project named after the folder. */
+export async function projectForDir(api: Api, dir: string, explicit?: string): Promise<string | undefined> {
+  if (explicit) return explicit;
+  const remote = git(dir, ["remote", "get-url", "origin"])?.trim();
+  const key = remote ? repoKeyFromRemote(remote) : null;
+  const { projects } = (await (await api("GET", "/api/v1/projects")).json()) as { projects: { id: string; repoKey: string | null; name: string }[] };
+  return projects.find((p) => (key ? p.repoKey === key : p.name === basename(dir)))?.id;
+}
+
 /** `mm sync [dir]`: keep this folder in step with its project. */
 export async function syncCommand(argv: string[], deps: { api: Api; baseUrl: string }) {
   const i = argv.indexOf("--project");
   const dir = resolve(argv.find((a, j) => !a.startsWith("-") && argv[j - 1] !== "--project") ?? ".");
-  let projectId = i >= 0 ? argv[i + 1] : undefined;
-  if (!projectId) {
-    const remote = git(dir, ["remote", "get-url", "origin"])?.trim();
-    const key = remote ? repoKeyFromRemote(remote) : null;
-    const { projects } = (await (await deps.api("GET", "/api/v1/projects")).json()) as { projects: { id: string; repoKey: string | null; name: string }[] };
-    projectId = projects.find((p) => (key ? p.repoKey === key : p.name === basename(dir)))?.id;
-  }
+  const projectId = await projectForDir(deps.api, dir, i >= 0 ? argv[i + 1] : undefined);
   if (!projectId) {
     console.error("No project for this folder. Share it with `mm up`, or pass --project <id>.");
     process.exit(1);
