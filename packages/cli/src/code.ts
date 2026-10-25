@@ -13,7 +13,8 @@ import Anthropic from "@anthropic-ai/sdk";
 
 type Api = (method: string, path: string, body?: unknown) => Promise<Response>;
 
-const MODEL = "claude-opus-5-5";
+export const CODE_MODEL = "claude-opus-5-5";
+const MODEL = CODE_MODEL;
 const OUTPUT_CAP = 30_000; // chars of tool output sent back per call
 
 // ponytail: one interface, two backends — local fs/shell or the machine API.
@@ -130,6 +131,8 @@ function clip(s: string): string {
 
 const dim = (s: string) => (process.stdout.isTTY ? `\x1b[2m${s}\x1b[0m` : s);
 const bold = (s: string) => (process.stdout.isTTY ? `\x1b[1m${s}\x1b[0m` : s);
+// Same cobalt as the TUI (#6f8cff).
+const brand = (s: string) => (process.stdout.isTTY ? `\x1b[1;38;2;111;140;255m${s}\x1b[0m` : s);
 
 export async function codeCommand(argv: string[], deps: { api: Api }) {
   const flag = (name: string) => {
@@ -138,6 +141,8 @@ export async function codeCommand(argv: string[], deps: { api: Api }) {
   };
   const machine = flag("--machine");
   const oneShot = flag("-p") ?? flag("--prompt");
+  // From the TUI home screen: run this first, then stay in the REPL.
+  const initial = flag("--initial");
   let autoApprove = argv.includes("--yes");
   const backend = machine ? machineBackend(machine, deps.api) : localBackend(process.cwd());
 
@@ -277,9 +282,17 @@ export async function codeCommand(argv: string[], deps: { api: Api }) {
       }
       return;
     }
-    console.log(`${bold("mm code")} ${dim(`· ${MODEL} · ${backend.label}`)}\n${dim("/exit to quit · /clear to reset · Ctrl-C to stop")}\n`);
+    console.log(`${brand("▌ mm code")} ${dim(`· ${MODEL} · ${backend.label}`)}\n${dim("  /exit to quit · /clear to reset · ctrl+c to stop")}\n`);
+    if (initial) {
+      console.log(`${brand("›")} ${initial}\n`);
+      try {
+        await turn(initial);
+      } catch (err) {
+        if (!report(err)) return;
+      }
+    }
     for (;;) {
-      const line = (await rl.question(bold("› "))).trim();
+      const line = (await rl.question(`\n${brand("›")} `)).trim();
       if (!line) continue;
       if (line === "/exit" || line === "/quit") return;
       if (line === "/clear") {

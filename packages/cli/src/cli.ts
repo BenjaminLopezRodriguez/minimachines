@@ -11,7 +11,7 @@ import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
-import { codeCommand } from "./code.js";
+import { CODE_MODEL, codeCommand } from "./code.js";
 import { peopleCommand, repoKeyFromRemote } from "./people.js";
 
 type Machine = {
@@ -806,7 +806,16 @@ async function main() {
   const tuiDeps = () => ({
     api: apiOrThrow,
     openUrl,
-    code: (machineId: string) => codeCommand(["--machine", machineId], { api: apiOrThrow }),
+    code: (machineId?: string, prompt?: string) =>
+      codeCommand(
+        [...(machineId ? ["--machine", machineId] : []), ...(prompt ? ["--initial", prompt] : [])],
+        { api: apiOrThrow },
+      ),
+    info: {
+      version: (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version,
+      host: new URL(baseUrl()).host,
+      model: CODE_MODEL,
+    },
   });
 
   // Bare `mm`: a person at a terminal gets the TUI; an agent (`mm --no-tui`) gets
