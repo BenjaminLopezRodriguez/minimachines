@@ -53,3 +53,6 @@ yarn-error.log*
 # minimachine local experiment: synced machine artifacts
 experiments/minimachine-local/minimachine-out/
 packages/cli/skill/
+
+# Workspace package installs (pnpm links); never commit them
+packages/*/node_modules/
