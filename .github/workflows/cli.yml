@@ -53,6 +53,7 @@ jobs:
           if ($LASTEXITCODE -ne 1) { throw "expected exit 1, got $LASTEXITCODE" }
           if ($out -notmatch "Not logged in") { throw "unexpected output: $out" }
           Write-Output "missing-login path ok"
+          exit 0  # the step otherwise inherits mm's deliberate exit 1 above
       - name: Run the installed CLI
         if: runner.os != 'Windows'
         shell: bash
