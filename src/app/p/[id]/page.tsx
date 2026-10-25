@@ -4,6 +4,7 @@ import { Lock } from "lucide-react";
 import { Workspace } from "~/components/workspace/workspace";
 import { displayName } from "~/server/data/invite-delivery";
 import { projectMachine } from "~/server/data/machine-store";
+import { blobEnabled } from "~/server/data/project-blobs";
 import { getProject, getRole } from "~/server/data/projects";
 import { roomAccess, roomToken, syncEnabled } from "~/server/data/sync-token";
 
@@ -50,6 +51,7 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
       me={{ name: (user.firstName ?? "").trim() || me.name }}
       machine={machine ? { id: machine.id, name: machine.name, status: machine.status, appUrl: machine.appUrl ?? null, consoleUrl: machine.emulatorUrl ?? null } : null}
       refreshToken={refreshToken.bind(null, id)}
+      storage={blobEnabled()}
     />
   );
 }

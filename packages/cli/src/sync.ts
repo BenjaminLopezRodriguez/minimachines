@@ -10,6 +10,7 @@
  * lock and no "pull first". Text files only; binaries and ignored paths stay local.
  */
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -23,7 +24,26 @@ type Api = (method: string, path: string, body?: unknown) => Promise<Response>;
 type Access = { host: string; secure: boolean; room: string; token: string; role: string };
 
 const IGNORE = new Set([".git", "node_modules", ".next", "dist", "build", ".turbo", ".vercel", ".wrangler", "coverage", ".DS_Store"]);
-const MAX_BYTES = 1_000_000;
+const MAX_BYTES = 1_000_000; // text files above this stay local
+const MAX_BLOB_BYTES = 4 * 1024 * 1024; // binary files go through project file storage, up to this
+const MIME: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", avif: "image/avif",
+  pdf: "application/pdf", woff: "font/woff", woff2: "font/woff2", mp3: "audio/mpeg", wav: "audio/wav", mp4: "video/mp4", webm: "video/webm",
+};
+const mimeOf = (key: string) => MIME[key.split(".").pop()!.toLowerCase()] ?? "application/octet-stream";
+type BlobEntry = { sha: string; size: number; mime: string };
+
+/** Bytes + sha256 of a binary file small enough to share; null otherwise. */
+function readBinary(abs: string): { bytes: Uint8Array; sha: string } | null {
+  try {
+    const st = statSync(abs);
+    if (!st.isFile() || st.size > MAX_BLOB_BYTES) return null;
+    const bytes = new Uint8Array(readFileSync(abs));
+    return { bytes, sha: createHash("sha256").update(bytes).digest("hex") };
+  } catch {
+    return null;
+  }
+}
 const LOCAL = Symbol("local"); // transaction origin for edits that came from this folder
 
 const toKey = (p: string) => p.split(sep).join("/"); // doc paths are always posix
@@ -149,8 +169,46 @@ export async function runSync(opts: { api: Api; projectId: string; dir: string; 
   const log = (s: string) => opts.quiet || console.log(s);
   const doc = new Y.Doc();
   const files = doc.getMap<Y.Text>("files");
+  // Binary files: path → the stored blob. The bytes live in project file storage (Vercel Blob).
+  const blobs = doc.getMap<BlobEntry>("blobs");
   const { provider, access } = await connect(api, projectId, doc);
   const readOnly = access.role === "viewer";
+  const onDiskBin = new Map<string, string | null>(); // path → sha we last wrote/read
+  let storageOff = false;
+
+  const uploadBlob = async (key: string, bytes: Uint8Array, sha: string) => {
+    if (storageOff) return;
+    try {
+      await api("PUT", `/api/v1/projects/${projectId}/blobs?type=${encodeURIComponent(mimeOf(key))}`, bytes);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/not configured/i.test(msg)) {
+        storageOff = true;
+        log("binary files stay local: file storage isn't set up on this server");
+      } else log(`✗ ${key}: ${msg}`);
+      return;
+    }
+    onDiskBin.set(key, sha);
+    doc.transact(() => {
+      files.delete(key); // a path is text or binary, never both
+      blobs.set(key, { sha, size: bytes.byteLength, mime: mimeOf(key) });
+    }, LOCAL);
+  };
+  const writeBlobLocal = async (key: string) => {
+    const abs = join(dir, key);
+    const entry = blobs.get(key);
+    if (!entry) {
+      if (onDiskBin.get(key)) rmSync(abs, { force: true });
+      onDiskBin.set(key, null);
+      return;
+    }
+    if (readBinary(abs)?.sha === entry.sha) return void onDiskBin.set(key, entry.sha);
+    const bytes = new Uint8Array(await (await api("GET", `/api/v1/projects/${projectId}/blobs/${entry.sha}`)).arrayBuffer());
+    if (createHash("sha256").update(bytes).digest("hex") !== entry.sha) return log(`✗ ${key}: download didn't match its hash`);
+    mkdirSync(dirname(abs), { recursive: true });
+    onDiskBin.set(key, entry.sha);
+    writeFileSync(abs, bytes);
+  };
 
   // What we last wrote to (or read from) disk per path — an fs event matching it is our own echo.
   const onDisk = new Map<string, string | null>();
@@ -160,6 +218,7 @@ export async function runSync(opts: { api: Api; projectId: string; dir: string; 
     const base = onDisk.get(key);
     onDisk.set(key, text);
     doc.transact(() => {
+      if (text !== null) blobs.delete(key); // a path is text or binary, never both
       const y = files.get(key);
       if (text === null) files.delete(key);
       else if (y) applyText(y, base == null ? text : rebase(base, text, y.toString()));
@@ -192,10 +251,14 @@ export async function runSync(opts: { api: Api; projectId: string; dir: string; 
   const local = new Set(listFiles(dir));
   let pushed = 0;
   let pulled = 0;
+  const localBinaries: string[] = [];
   doc.transact(() => {
     for (const key of local) {
       const text = readText(join(dir, key));
-      if (text === null) continue;
+      if (text === null) {
+        localBinaries.push(key);
+        continue;
+      }
       onDisk.set(key, text);
       const y = files.get(key);
       if (!y) {
@@ -217,7 +280,34 @@ export async function runSync(opts: { api: Api; projectId: string; dir: string; 
       pulled++;
     }
   }
-  log(`synced ${files.size} files (${pushed} up, ${pulled} down)${readOnly ? " · view-only" : ""}`);
+  // Binaries: push what only we have (or ours, for `mm up`), pull the rest.
+  for (const key of localBinaries) {
+    const bin = readBinary(join(dir, key));
+    if (!bin) continue; // over the size limit: stays local
+    const entry = blobs.get(key);
+    onDiskBin.set(key, bin.sha);
+    if (entry?.sha === bin.sha) continue;
+    if (!readOnly && (!entry || opts.seed === "local")) {
+      await uploadBlob(key, bin.bytes, bin.sha);
+      pushed++;
+    }
+  }
+  for (const key of blobs.keys()) {
+    if (opts.seed === "local" && localBinaries.includes(key)) continue;
+    if (onDiskBin.get(key) !== blobs.get(key)!.sha) {
+      await writeBlobLocal(key).catch((e: Error) => log(`✗ ${key}: ${e.message}`));
+      pulled++;
+    }
+  }
+  log(`synced ${files.size + blobs.size} files (${pushed} up, ${pulled} down)${readOnly ? " · view-only" : ""}`);
+
+  blobs.observe((e, txn) => {
+    if (txn.origin === LOCAL) return;
+    for (const k of e.keysChanged) {
+      if (ignoredPath(k)) continue;
+      void writeBlobLocal(k).then(() => log(`↓ ${k}`), (err: Error) => log(`✗ ${k}: ${err.message}`));
+    }
+  });
 
   // Room → disk: everything not done by this folder. Batched per file so a
   // teammate typing becomes one write (and one dev-server reload), not dozens.
@@ -245,7 +335,20 @@ export async function runSync(opts: { api: Api; projectId: string; dir: string; 
     if (readOnly || ignoredPath(key)) return;
     const abs = join(dir, key);
     const text = readText(abs);
-    if (text === null && existsSync(abs)) return; // binary, too big, or a directory
+    if (text === null && existsSync(abs)) {
+      // Binary (or a big file, or a directory): share it through file storage if it fits.
+      const bin = readBinary(abs);
+      if (!bin || onDiskBin.get(key) === bin.sha) return;
+      if (!blobs.has(key) && !files.has(key) && git(dir, ["check-ignore", "-q", key]) !== null) return;
+      onDiskBin.set(key, bin.sha);
+      void uploadBlob(key, bin.bytes, bin.sha).then(() => log(`↑ ${key}`));
+      return;
+    }
+    if (text === null && blobs.has(key)) {
+      onDiskBin.set(key, null);
+      doc.transact(() => blobs.delete(key), LOCAL);
+      return log(`↑ ${key} (deleted)`);
+    }
     if (onDisk.get(key) === text || (text === null && !files.has(key))) return;
     // New files must pass .gitignore, like the first pass.
     if (!files.has(key) && git(dir, ["check-ignore", "-q", key]) !== null) return;

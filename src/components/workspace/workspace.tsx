@@ -106,12 +106,34 @@ function Tree({ paths, open, onOpen, peers }: { paths: string[]; open: string | 
   );
 }
 
+function BinaryPreview({ path, entry, src }: { path: string; entry: { size: number; mime: string }; src: string | null }) {
+  const kb = `${Math.max(1, Math.round(entry.size / 1024))} KB`;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-auto p-6 text-sm text-muted-foreground">
+      {src && entry.mime.startsWith("image/") ? (
+        // eslint-disable-next-line @next/next/no-img-element -- a private project file, not an optimizable asset
+        <img src={src} alt={path} className="max-h-[70%] max-w-full rounded-md border object-contain" />
+      ) : null}
+      <span>
+        {path.split("/").pop()} · {entry.mime} · {kb}
+      </span>
+      {src && (
+        <a href={src} download={path.split("/").pop()} className="rounded-full border px-3 py-1.5 text-xs text-foreground hover:bg-[var(--hover)]">
+          Download
+        </a>
+      )}
+    </div>
+  );
+}
+
 export function Workspace(props: {
   project: { id: string; name: string; repoKey: string | null };
   access: Access;
   me: { name: string };
   machine: { id: string; name: string; status: string; appUrl: string | null; consoleUrl: string | null } | null;
   refreshToken: () => Promise<string>;
+  /** Server has project file storage: images on the whiteboard and binary files in the tree. */
+  storage: boolean;
 }) {
   const { access, project, machine } = props;
   const readOnly = access.role === "viewer";
@@ -129,6 +151,8 @@ export function Workspace(props: {
     return { doc, provider };
   });
   const files = doc.getMap<Y.Text>("files");
+  // Binary files synced by `mm sync`: path → blob in project file storage.
+  const blobs = doc.getMap<{ sha: string; size: number; mime: string }>("blobs");
 
   const [paths, setPaths] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
@@ -144,11 +168,11 @@ export function Workspace(props: {
     const onStatus = ({ status: s }: { status: string }) => setStatus(s === "connected" ? "live" : s === "connecting" ? "connecting" : "offline");
     const onSync = (synced: boolean) => {
       if (!synced) return;
-      const keys = [...files.keys()];
+      const keys = [...files.keys(), ...blobs.keys()];
       setPaths(keys);
       setOpen((cur) => cur ?? keys.find((k) => /readme/i.test(k)) ?? keys.sort()[0] ?? null);
     };
-    const onFiles = () => setPaths([...files.keys()]);
+    const onFiles = () => setPaths([...files.keys(), ...blobs.keys()]);
     const onPeers = () => {
       const list: Peer[] = [];
       provider.awareness.getStates().forEach((s, id) => {
@@ -161,13 +185,15 @@ export function Workspace(props: {
     provider.on("status", onStatus);
     provider.on("sync", onSync);
     files.observe(onFiles);
+    blobs.observe(onFiles);
     provider.awareness.on("change", onPeers);
     return () => {
       files.unobserve(onFiles);
+      blobs.unobserve(onFiles);
       provider.destroy();
       doc.destroy();
     };
-  }, [provider, doc, files, color, props.me.name]);
+  }, [provider, doc, files, blobs, color, props.me.name]);
 
   // (Re)bind the editor to the open file.
   useEffect(() => {
@@ -261,7 +287,7 @@ export function Workspace(props: {
       </header>
 
       {view === "board" ? (
-        <Board doc={doc} awareness={provider.awareness} readOnly={readOnly} me={props.me.name} />
+        <Board doc={doc} awareness={provider.awareness} readOnly={readOnly} me={props.me.name} files={props.storage ? `/p/${project.id}/blobs` : null} />
       ) : (
       <div className="flex min-h-0 flex-1">
         <aside className="hidden w-60 shrink-0 flex-col border-r md:flex">
@@ -293,7 +319,11 @@ export function Workspace(props: {
             </select>
             <span className="hidden truncate font-mono md:inline">{open ?? "no file open"}</span>
           </div>
-          <div ref={editorEl} className="min-h-0 flex-1 overflow-hidden" />
+          {open && blobs.has(open) ? (
+            <BinaryPreview path={open} entry={blobs.get(open)!} src={props.storage ? `/p/${project.id}/blobs/${blobs.get(open)!.sha}` : null} />
+          ) : (
+            <div ref={editorEl} className="min-h-0 flex-1 overflow-hidden" />
+          )}
         </main>
 
         <section className="hidden w-[42%] shrink-0 flex-col border-l lg:flex" aria-label="Preview">

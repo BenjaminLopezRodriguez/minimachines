@@ -20,9 +20,9 @@ import {
   newElementWith,
   reconcileElements,
 } from "@excalidraw/excalidraw";
-import type { ExcalidrawElement, OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import type { ExcalidrawElement, FileId, OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
-import type { AppState, Collaborator, ExcalidrawImperativeAPI, SocketId } from "@excalidraw/excalidraw/types";
+import type { AppState, BinaryFiles, Collaborator, DataURL, ExcalidrawImperativeAPI, SocketId } from "@excalidraw/excalidraw/types";
 import { Bot, ExternalLink, ListTodo, Rocket, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Awareness } from "y-protocols/awareness";
@@ -61,8 +61,17 @@ function useSiteTheme(): "light" | "dark" {
   return theme;
 }
 
-export function Board({ doc, awareness, readOnly, me }: { doc: Y.Doc; awareness: Awareness; readOnly: boolean; me: string }) {
+type FileMeta = { sha: string; mimeType: string; created: number };
+
+/**
+ * `files` is where images live: `${files}?type=` to upload (POST, raw bytes → { sha }),
+ * `${files}/<sha>` to read. Null when the server has no file storage (images stay off).
+ */
+export function Board({ doc, awareness, readOnly, me, files }: { doc: Y.Doc; awareness: Awareness; readOnly: boolean; me: string; files: string | null }) {
   const canvas = useMemo(() => doc.getMap<OrderedExcalidrawElement>("canvas"), [doc]);
+  // Image bytes are in project file storage (Vercel Blob); the room only records which blob each image is.
+  const canvasFiles = useMemo(() => doc.getMap<FileMeta>("canvas-files"), [doc]);
+  const fileJobs = useRef(new Set<string>()); // uploads/downloads in flight, so each runs once
   const cardsMap = useMemo(() => doc.getMap<Y.Map<unknown>>("board"), [doc]);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   // Excalidraw loads its initial scene after handing out the API; scene updates before that are overwritten.
@@ -79,10 +88,30 @@ export function Board({ doc, awareness, readOnly, me }: { doc: Y.Doc; awareness:
   // --- canvas ⇄ room -----------------------------------------------------------
 
   const onChange = useCallback(
-    (elements: readonly OrderedExcalidrawElement[], appState: AppState) => {
+    (elements: readonly OrderedExcalidrawElement[], appState: AppState, binary: BinaryFiles) => {
       setReady(true);
       setSelectedCount(Object.keys(appState.selectedElementIds).length);
       if (readOnly) return;
+      // New images: upload once, then record them so other tabs can fetch them.
+      if (files) {
+        for (const [id, f] of Object.entries(binary)) {
+          if (canvasFiles.has(id) || fileJobs.current.has(id)) continue;
+          fileJobs.current.add(id);
+          void (async () => {
+            try {
+              const bytes = await (await fetch(f.dataURL)).blob();
+              const res = await fetch(`${files}?type=${encodeURIComponent(f.mimeType)}`, { method: "POST", body: bytes });
+              if (!res.ok) throw new Error(res.status === 413 ? "Images over 4 MB can't be shared yet." : `Upload failed (${res.status})`);
+              const { sha } = (await res.json()) as { sha: string };
+              canvasFiles.set(id, { sha, mimeType: f.mimeType, created: f.created });
+            } catch (err) {
+              window.alert(err instanceof Error ? err.message : "Image upload failed");
+            } finally {
+              fileJobs.current.delete(id);
+            }
+          })();
+        }
+      }
       const changed = elements.filter((el) => seen.current.get(el.id) !== el.version);
       if (!changed.length) return;
       doc.transact(() => {
@@ -94,8 +123,38 @@ export function Board({ doc, awareness, readOnly, me }: { doc: Y.Doc; awareness:
         }
       }, LOCAL);
     },
-    [doc, canvas, readOnly],
+    [doc, canvas, canvasFiles, files, readOnly],
   );
+
+  // Images other people added: fetch the bytes and hand them to Excalidraw.
+  useEffect(() => {
+    if (!api || !ready || !files) return;
+    const load = () => {
+      const have = api.getFiles();
+      for (const [id, meta] of canvasFiles.entries()) {
+        if (have[id] || fileJobs.current.has(id)) continue;
+        fileJobs.current.add(id);
+        void fetch(`${files}/${meta.sha}`)
+          .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+          .then(
+            (blob) =>
+              new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+                reader.onerror = () => reject(reader.error ?? new Error("Could not read image"));
+                // Re-type the bytes: the stored blob may be served as a generic type.
+                reader.readAsDataURL(new Blob([blob], { type: meta.mimeType }));
+              }),
+          )
+          .then((dataURL) => api.addFiles([{ id: id as FileId, mimeType: meta.mimeType as never, dataURL: dataURL as DataURL, created: meta.created }]))
+          .catch(() => undefined) // a missing image just stays a placeholder
+          .finally(() => fileJobs.current.delete(id));
+      }
+    };
+    load();
+    canvasFiles.observe(load);
+    return () => canvasFiles.unobserve(load);
+  }, [api, ready, files, canvasFiles]);
 
   useEffect(() => {
     if (!api || !ready) return;
@@ -258,7 +317,7 @@ export function Board({ doc, awareness, readOnly, me }: { doc: Y.Doc; awareness:
           viewModeEnabled={readOnly}
           theme={theme}
           name="whiteboard"
-          UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, export: { saveFileToDisk: true } }, tools: { image: false } }}
+          UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, export: { saveFileToDisk: true } }, tools: { image: Boolean(files) } }}
           renderTopRightUI={() => (
             <div className="flex items-center gap-1.5">
               {!readOnly && (
