@@ -53,7 +53,7 @@ function usage(exitCode = 1): never {
   const print = exitCode === 0 ? console.log : console.error;
   print(`Usage:
   mm                       open the TUI (machines · shares · people); press ? for keys
-  mm -a                    agents: same data as NDJSON, never interactive. Prefix any command with -a.
+  mm --no-tui              agents: same data as NDJSON, never interactive. Add --no-tui to any command.
   minimachines skill install [--agent claude|codex|cursor] [--dir <path>] [--print]
   minimachines create <templateId> [--json]
   minimachines exec <machineId> <command...> [--cwd <dir>]
@@ -798,10 +798,10 @@ function whoami() {
 }
 
 async function main() {
-  // `-a` marks an agent caller: never open the TUI or any other interactive UI for it.
+  // `--no-tui` marks an agent caller: never open the TUI or any other interactive UI for it.
   const raw = process.argv.slice(2);
-  const agent = raw.includes("-a") || raw.includes("--agent-mode");
-  const args = raw.filter((a) => a !== "-a" && a !== "--agent-mode");
+  const agent = raw.includes("--no-tui");
+  const args = raw.filter((a) => a !== "--no-tui");
   const cmd = args[0];
   const tuiDeps = () => ({
     api: apiOrThrow,
@@ -809,8 +809,8 @@ async function main() {
     code: (machineId: string) => codeCommand(["--machine", machineId], { api: apiOrThrow }),
   });
 
-  // Bare `mm`: a person at a terminal gets the TUI; an agent (`mm -a`) gets the
-  // same data as NDJSON. Not logged in, or piped without -a → usage, as before.
+  // Bare `mm`: a person at a terminal gets the TUI; an agent (`mm --no-tui`) gets
+  // the same data as NDJSON. Not logged in, or piped without the flag → usage.
   if (!cmd && resolveKey() && (agent || (process.stdin.isTTY && process.stdout.isTTY))) {
     // Loaded lazily: Ink needs Node 22+, the rest of the CLI runs on 20.
     const { tuiCommand } = await import("./tui.js");

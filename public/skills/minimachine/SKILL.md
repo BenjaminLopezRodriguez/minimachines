@@ -29,12 +29,12 @@ When this skill is active, this is not optional:
   user has to click, which is the thing this tool removes. Approvals belong on
   the phone via `mm ask`, not in their terminal.
 - **Deliver a public URL**, never "it's running locally."
-- **Always call the CLI with `-a`.** Bare `mm` opens an interactive TUI meant
-  for a person and will hang an agent. `mm -a` prints the same data
-  (machines, shares, people) as NDJSON, one line per tab, and never opens
-  anything interactive. Put `-a` in front of every command you run
-  (`mm -a create node-ts`, `mm -a exec <id> npm test`); it changes nothing
-  else about the command.
+- **Always call the CLI with `--no-tui`.** Bare `mm` opens an interactive TUI
+  meant for a person and will hang an agent. `mm --no-tui` prints the same
+  data (machines, shares, people) as NDJSON, one line per tab, and never opens
+  anything interactive. Add `--no-tui` to every command you run
+  (`mm --no-tui create node-ts`, `mm --no-tui exec <id> npm test`); it changes
+  nothing else about the command.
 
 ---
 
@@ -148,7 +148,7 @@ exposed; port 3000 is the one surfaced as `appUrl`.
 
 | Command | Purpose |
 |---|---|
-| `mm -a` | Agent snapshot: machines, shares, people as NDJSON (bare `mm` is the human TUI — never run it) |
+| `mm --no-tui` | Agent snapshot: machines, shares, people as NDJSON (bare `mm` is the human TUI — never run it) |
 | `mm create <templateId> [--json]` | Boot a machine → prints `id`, `appUrl` |
 | `mm exec <id> <cmd…> [--cwd <dir>]` | Run a command in the VM; mirrors its exit code |
 | `mm put <id> <local> <remote>` | Upload a file into the workspace |
