@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const auth = await requireApiKey(request);
   if (!isApiAuth(auth)) return auth;
   return jsonOk({
-    machines: await listMachines({ ownerUserId: auth.userId }),
+    machines: await listMachines({ ownerUserId: auth.userId, keyId: auth.keyId }),
   });
 }
 

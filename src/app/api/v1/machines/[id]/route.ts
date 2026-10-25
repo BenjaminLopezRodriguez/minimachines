@@ -8,7 +8,11 @@ export async function GET(request: Request, ctx: Ctx) {
   const auth = await requireApiKey(request);
   if (!isApiAuth(auth)) return auth;
   const { id } = await ctx.params;
-  const machine = await getMachine(id, { ownerUserId: auth.userId });
+  const machine = await getMachine(id, {
+    ownerUserId: auth.userId,
+    keyId: auth.keyId,
+    access: "read",
+  });
   if (!machine) return jsonError("machine_not_found", "Machine not found", 404);
   return jsonOk({ machine });
 }

@@ -6,6 +6,8 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "~/server/db";
 import { machines as machinesTable, shares } from "~/server/db/schema";
 
+import { machineAccess } from "./machine-store";
+
 function hashSecret(secret: string): string {
   return createHash("sha256").update(secret).digest("hex");
 }
@@ -91,7 +93,7 @@ export async function createShare(input: ShareInput): Promise<ShareRow> {
       .where(
         and(
           eq(machinesTable.id, input.machineId),
-          eq(machinesTable.ownerUserId, input.ownerUserId),
+          machineAccess(input.ownerUserId),
         ),
       )
       .limit(1);
